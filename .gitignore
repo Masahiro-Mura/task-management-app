@@ -1,0 +1,19 @@
+# macOS
+.DS_Store
+
+# Xcode user settings
+xcuserdata/
+*.xcuserstate
+
+# Xcode build files
+DerivedData/
+build/
+*.moved-aside
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Xcode playground
+timeline.xctimeline
+playground.xcworkspace
