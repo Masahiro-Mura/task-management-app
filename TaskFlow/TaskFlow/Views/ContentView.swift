@@ -113,6 +113,9 @@ struct ContentView: View {
                                     task: task,
                                     onToggleCompletion: {
                                         viewModel.toggleCompletion(for: task)
+                                    },
+                                    onDelete: {
+                                        viewModel.deleteTask(task)
                                     }
                                 )
                             }

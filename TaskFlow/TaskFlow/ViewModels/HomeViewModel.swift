@@ -76,6 +76,13 @@ final class HomeViewModel: ObservableObject {
         updateRecommendation()
     }
     
+    /// 指定したタスクを削除する
+    func deleteTask(_ task: TaskItem) {
+        tasks.removeAll { $0.id == task.id }
+        saveTasks()
+        updateRecommendation()
+    }
+    
     /// 現在のタスク一覧をUserDefaultsへ保存する
     private func saveTasks() {
         guard let data = try? JSONEncoder().encode(tasks) else {
