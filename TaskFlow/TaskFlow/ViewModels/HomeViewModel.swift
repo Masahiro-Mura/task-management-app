@@ -8,6 +8,7 @@ final class HomeViewModel: ObservableObject {
     @Published private(set) var recommendation: TaskRecommendation?
 
     private let decisionEngine = DecisionEngine()
+    private let tasksStorageKey = "taskFlow.tasks"
 
     private let availableMinutes = 45
     
@@ -36,7 +37,12 @@ final class HomeViewModel: ObservableObject {
     }
 
     init() {
-        loadSampleTasks()
+        if let savedTasks = loadTasks() {
+            tasks = savedTasks
+        } else {
+            loadSampleTasks()
+        }
+
         updateRecommendation()
     }
 
@@ -55,6 +61,7 @@ final class HomeViewModel: ObservableObject {
         )
 
         tasks.append(task)
+        saveTasks()
         updateRecommendation()
     }
     
@@ -65,7 +72,31 @@ final class HomeViewModel: ObservableObject {
         }
 
         tasks[index].isCompleted.toggle()
+        saveTasks()
         updateRecommendation()
+    }
+    
+    /// 現在のタスク一覧をUserDefaultsへ保存する
+    private func saveTasks() {
+        guard let data = try? JSONEncoder().encode(tasks) else {
+            return
+        }
+
+        UserDefaults.standard.set(data, forKey: tasksStorageKey)
+    }
+    
+    /// UserDefaultsから保存済みのタスク一覧を読み込む
+    private func loadTasks() -> [TaskItem]? {
+        guard let data = UserDefaults.standard.data(
+            forKey: tasksStorageKey
+        ) else {
+            return nil
+        }
+
+        return try? JSONDecoder().decode(
+            [TaskItem].self,
+            from: data
+        )
     }
 
     /// 現在のタスク一覧から推薦を再計算する
