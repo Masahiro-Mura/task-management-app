@@ -83,6 +83,19 @@ final class HomeViewModel: ObservableObject {
         updateRecommendation()
     }
     
+    /// 既存タスクの内容を更新する
+    func updateTask(_ updatedTask: TaskItem) {
+        guard let index = tasks.firstIndex(
+            where: { $0.id == updatedTask.id }
+        ) else {
+            return
+        }
+
+        tasks[index] = updatedTask
+        saveTasks()
+        updateRecommendation()
+    }
+    
     /// 現在のタスク一覧をUserDefaultsへ保存する
     private func saveTasks() {
         guard let data = try? JSONEncoder().encode(tasks) else {

@@ -98,29 +98,32 @@ struct ContentView: View {
                             }
                         }
                     }
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("すべて")
-                            .font(.title2)
-                            .fontWeight(.bold)
-
-                        if viewModel.allTasks.isEmpty {
-                            Text("タスクはありません")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        } else {
-                            ForEach(viewModel.allTasks) { task in
-                                TaskRowView(
-                                    task: task,
-                                    onToggleCompletion: {
-                                        viewModel.toggleCompletion(for: task)
-                                    },
-                                    onDelete: {
-                                        viewModel.deleteTask(task)
-                                    }
-                                )
+                    NavigationLink {
+                        AllTasksView(
+                            tasks: viewModel.allTasks,
+                            onToggleCompletion: { task in
+                                viewModel.toggleCompletion(for: task)
+                            },
+                            onDelete: { task in
+                                viewModel.deleteTask(task)
+                            },
+                            onUpdate: { updatedTask in
+                                viewModel.updateTask(updatedTask)
                             }
+                        )
+                    } label: {
+                        HStack {
+                            Text("すべてのタスク")
+                                .font(.title2)
+                                .fontWeight(.bold)
+
+                            Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .foregroundStyle(.secondary)
                         }
                     }
+                    .buttonStyle(.plain)
                     Spacer()
                 }
                 .padding()
