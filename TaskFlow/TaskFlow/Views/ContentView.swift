@@ -35,6 +35,15 @@ struct ContentView: View {
                     
                     if let recommendation = viewModel.recommendation {
                         VStack(alignment: .leading, spacing: 12) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "sparkles")
+
+                                Text("おすすめ")
+                                    .fontWeight(.semibold)
+                            }
+                            .font(.subheadline)
+                            .foregroundStyle(.blue)
+                            
                             Text(recommendation.task.title)
                                 .font(.title2)
                                 .fontWeight(.semibold)
@@ -43,13 +52,23 @@ struct ContentView: View {
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                             
-                            Text(recommendation.reason)
-                                .font(.body)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("このタスクをおすすめする理由")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+
+                                Text(recommendation.reason)
+                                    .font(.body)
+                            }
                         }
                         .padding()
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(.thinMaterial)
                         .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(.blue.opacity(0.4), lineWidth: 1)
+                        }
                     } else {
                         ContentUnavailableView(
                             "実行できるタスクがありません",
@@ -58,9 +77,13 @@ struct ContentView: View {
                     }
                     
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("今日")
-                            .font(.title2)
-                            .fontWeight(.bold)
+                        HStack(spacing: 8) {
+                            Image(systemName: "sun.max")
+
+                            Text("今日")
+                        }
+                        .font(.title2)
+                        .fontWeight(.bold)
                         
                         if viewModel.todayTasks.isEmpty {
                             Text("今日のタスクはありません")
@@ -77,11 +100,19 @@ struct ContentView: View {
                             }
                         }
                     }
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.thinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
                     
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("明日")
-                            .font(.title2)
-                            .fontWeight(.bold)
+                        HStack(spacing: 8) {
+                            Image(systemName: "calendar")
+
+                            Text("明日")
+                        }
+                        .font(.title2)
+                        .fontWeight(.bold)
                         
                         if viewModel.tomorrowTasks.isEmpty {
                             Text("明日のタスクはありません")
@@ -98,6 +129,11 @@ struct ContentView: View {
                             }
                         }
                     }
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.thinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    
                     NavigationLink {
                         AllTasksView(
                             tasks: viewModel.allTasks,
@@ -112,7 +148,8 @@ struct ContentView: View {
                             }
                         )
                     } label: {
-                        HStack {
+                        HStack(spacing: 8){
+                            Image(systemName: "list.bullet")
                             Text("すべてのタスク")
                                 .font(.title2)
                                 .fontWeight(.bold)
@@ -122,7 +159,12 @@ struct ContentView: View {
                             Image(systemName: "chevron.right")
                                 .foregroundStyle(.secondary)
                         }
+                        .contentShape(Rectangle())
                     }
+                    .padding()
+                    .frame(maxWidth: .infinity)
+                    .background(.thinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
                     .buttonStyle(.plain)
                     Spacer()
                 }
