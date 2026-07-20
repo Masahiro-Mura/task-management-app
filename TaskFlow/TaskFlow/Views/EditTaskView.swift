@@ -100,6 +100,7 @@ struct EditTaskView: View {
                     )
                     
                     onSave(updatedTask)
+                    dismiss()
                 }
             }
         }
