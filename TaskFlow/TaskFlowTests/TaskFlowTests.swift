@@ -51,4 +51,40 @@ struct TaskFlowTests {
 
         #expect(result?.task.id == recommendedTask.id)
     }
+
+    @Test
+    func priorityIsPreservedThroughEncoding() throws {
+        let task = TaskItem(
+            title: "レポートを書く",
+            estimatedMinutes: 30,
+            priority: .high
+        )
+
+        let data = try JSONEncoder().encode(task)
+        let decoded = try JSONDecoder().decode(TaskItem.self, from: data)
+
+        #expect(decoded == task)
+        #expect(decoded.priority == .high)
+    }
+
+    @Test
+    func legacyTaskWithoutPriorityDecodesAsMedium() throws {
+        // priority 追加前に保存されたデータ
+        let json = """
+        {
+            "id": "\(UUID().uuidString)",
+            "title": "メールを整理する",
+            "isCompleted": false,
+            "estimatedMinutes": 15,
+            "prerequisiteIDs": []
+        }
+        """
+
+        let decoded = try JSONDecoder().decode(
+            TaskItem.self,
+            from: Data(json.utf8)
+        )
+
+        #expect(decoded.priority == .medium)
+    }
 }

@@ -58,7 +58,17 @@ struct EditTaskView: View {
                     step: 5
                 )
             }
-            
+
+            Section("優先度") {
+                Picker("優先度", selection: $priority) {
+                    ForEach(TaskPriority.allCases, id: \.self) { priority in
+                        Text(priority.displayName)
+                            .tag(priority)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+
             Section("実施予定日") {
                 Toggle(
                     "実施予定日を設定",
@@ -98,6 +108,7 @@ struct EditTaskView: View {
                         title: title,
                         isCompleted: task.isCompleted,
                         estimatedMinutes: estimatedMinutes,
+                        priority: priority,
                         scheduledDate: hasScheduledDate ? scheduledDate : nil,
                         deadline: hasDeadline ? deadline : nil,
                         prerequisiteIDs: task.prerequisiteIDs

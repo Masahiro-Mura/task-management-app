@@ -61,7 +61,6 @@ UIの見た目の確認はXcodeのPreview/シミュレータで人が行う。�
 
 ## 既知の課題（着手候補）
 
-- `EditTaskView` が保存時に `priority` を引き継がず、編集すると常に「中」に戻る。編集画面に優先度の選択もない。
 - `priority` は `DecisionEngine` の並び替えで使われていない。
 - 空き時間が `HomeViewModel` の `availableMinutes = 45` で固定。ユーザーが指定できない。
 - `prerequisiteIDs`（前提タスク）を設定するUIがない。
