@@ -132,7 +132,8 @@ struct DecisionEngineTests {
         let result = recommend([upcoming, overdue])
 
         #expect(result?.task.id == overdue.id)
-        #expect(result?.reason.contains("期限を過ぎている") == true)
+        #expect(result?.factor == .earlierDeadline)
+        #expect(result?.reason.contains("期限を過ぎていて") == true)
     }
 
     @Test
@@ -143,5 +144,179 @@ struct DecisionEngineTests {
 
         #expect(reason?.contains("所要時間20分") == true)
         #expect(reason?.contains("空き時間30分") == true)
+    }
+
+    // MARK: - 優先度と並び順
+
+    @Test
+    func higherPriorityWinsWhenNoDeadlineIsUrgent() {
+        let mediumSoonish = TaskItem(
+            title: "中・3日後",
+            estimatedMinutes: 10,
+            priority: .medium,
+            deadline: now.addingTimeInterval(60 * 60 * 24 * 3)
+        )
+        let highLater = TaskItem(
+            title: "高・7日後",
+            estimatedMinutes: 30,
+            priority: .high,
+            deadline: now.addingTimeInterval(60 * 60 * 24 * 7)
+        )
+
+        let result = recommend([mediumSoonish, highLater])
+
+        #expect(result?.task.id == highLater.id)
+        #expect(result?.factor == .higherPriority)
+        #expect(result?.reason == "優先度が「高」で、所要時間30分が空き時間45分に収まるからです。")
+    }
+
+    @Test
+    func urgentDeadlineBeatsHigherPriority() {
+        let urgentLow = TaskItem(
+            title: "低・3時間後",
+            estimatedMinutes: 20,
+            priority: .low,
+            deadline: now.addingTimeInterval(60 * 60 * 3)
+        )
+        let highNoDeadline = TaskItem(
+            title: "高・期限なし",
+            estimatedMinutes: 10,
+            priority: .high
+        )
+
+        let result = recommend([highNoDeadline, urgentLow])
+
+        #expect(result?.task.id == urgentLow.id)
+        #expect(result?.factor == .urgentDeadline)
+        #expect(result?.reason == "期限まであと3時間で、所要時間20分が空き時間45分に収まるからです。")
+    }
+
+    @Test
+    func urgentTasksAreOrderedByDeadlineBeforePriority() {
+        let highIn20Hours = TaskItem(
+            title: "高・20時間後",
+            estimatedMinutes: 10,
+            priority: .high,
+            deadline: now.addingTimeInterval(60 * 60 * 20)
+        )
+        let lowIn2Hours = TaskItem(
+            title: "低・2時間後",
+            estimatedMinutes: 10,
+            priority: .low,
+            deadline: now.addingTimeInterval(60 * 60 * 2)
+        )
+
+        let result = recommend([highIn20Hours, lowIn2Hours])
+
+        #expect(result?.task.id == lowIn2Hours.id)
+        #expect(result?.factor == .earlierDeadline)
+    }
+
+    @Test
+    func deadlineExactly24HoursAwayIsNotUrgent() {
+        let in24Hours = TaskItem(
+            title: "ちょうど24時間後",
+            estimatedMinutes: 10,
+            priority: .low,
+            deadline: now.addingTimeInterval(DecisionEngine.urgentDeadlineInterval)
+        )
+        let high = TaskItem(title: "高", estimatedMinutes: 10, priority: .high)
+
+        #expect(recommend([in24Hours, high])?.task.id == high.id)
+    }
+
+    // MARK: - 理由文
+
+    @Test
+    func reasonForOnlyCandidate() {
+        let task = TaskItem(title: "A", estimatedMinutes: 20)
+
+        let result = recommend([task])
+
+        #expect(result?.factor == .onlyCandidate)
+        #expect(result?.reason == "今取りかかれるのはこのタスクだけで、所要時間20分が空き時間45分に収まるからです。")
+    }
+
+    @Test
+    func reasonShowsMinutesWhenDeadlineIsWithinAnHour() {
+        let urgent = TaskItem(
+            title: "急ぎ",
+            estimatedMinutes: 10,
+            deadline: now.addingTimeInterval(60 * 40)
+        )
+        let other = TaskItem(title: "ほか", estimatedMinutes: 10)
+
+        #expect(recommend([urgent, other])?.reason.hasPrefix("期限まであと40分で、") == true)
+    }
+
+    @Test
+    func reasonWhenChosenTaskIsShorter() {
+        let shorter = TaskItem(title: "短い", estimatedMinutes: 10)
+        let longer = TaskItem(title: "長い", estimatedMinutes: 30)
+
+        let result = recommend([longer, shorter])
+
+        #expect(result?.factor == .shorter)
+        #expect(result?.reason == "ほかのタスクより短く、所要時間10分が空き時間45分に収まるからです。")
+    }
+
+    @Test
+    func reasonWithoutDecisiveFactorOnlyMentionsFit() {
+        let a = TaskItem(title: "A", estimatedMinutes: 10)
+        let b = TaskItem(title: "B", estimatedMinutes: 10)
+
+        let result = recommend([b, a])
+
+        #expect(result?.task.id == a.id)
+        #expect(result?.factor == RecommendationFactor.none)
+        #expect(result?.reason == "所要時間10分が空き時間45分に収まるからです。")
+    }
+
+    // MARK: - 推薦がないときの内訳
+
+    private func summarize(
+        _ tasks: [TaskItem],
+        availableMinutes: Int = 45
+    ) -> NoRecommendationSummary {
+        engine.summarizeNoRecommendation(
+            from: tasks,
+            context: DecisionContext(
+                availableMinutes: availableMinutes,
+                currentDate: now
+            )
+        )
+    }
+
+    @Test
+    func summaryCountsTooLongAndWaitingTasksSeparately() {
+        let preparation = TaskItem(title: "資料を集める", estimatedMinutes: 120)
+        let writing = TaskItem(
+            title: "レポートを書く",
+            estimatedMinutes: 30,
+            prerequisiteIDs: [preparation.id]
+        )
+        let slides = TaskItem(title: "発表資料", estimatedMinutes: 60)
+        let done = TaskItem(title: "済み", isCompleted: true, estimatedMinutes: 10)
+
+        let summary = summarize([preparation, writing, slides, done])
+
+        #expect(summary == NoRecommendationSummary(
+            incompleteCount: 3,
+            waitingForPrerequisitesCount: 1,
+            tooLongCount: 2,
+            shortestTooLongMinutes: 60
+        ))
+        #expect(!summary.allCompleted)
+    }
+
+    @Test
+    func summaryReportsAllCompleted() {
+        let summary = summarize([
+            TaskItem(title: "済み", isCompleted: true, estimatedMinutes: 10)
+        ])
+
+        #expect(summary.allCompleted)
+        #expect(summary.tooLongCount == 0)
+        #expect(summary.shortestTooLongMinutes == nil)
     }
 }

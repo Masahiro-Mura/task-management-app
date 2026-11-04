@@ -7,15 +7,33 @@ final class HomeViewModel: ObservableObject {
     @Published private(set) var tasks: [TaskItem] = []
     @Published private(set) var recommendation: TaskRecommendation?
 
+    /// 推薦がないときの内訳。推薦があるときはnil
+    @Published private(set) var noRecommendationSummary: NoRecommendationSummary?
+
+    /// 今回タスクに使える時間（分）
+    @Published private(set) var availableMinutes = HomeViewModel.defaultAvailableMinutes
+
     private let decisionEngine = DecisionEngine()
     private let userDefaults: UserDefaults
     private let tasksStorageKey = "taskFlow.tasks"
+    private let availableMinutesStorageKey = "taskFlow.availableMinutes"
 
     /// 読み込めなかった保存データの退避先キーの接頭辞
     static let unreadableTasksKeyPrefix = "taskFlow.tasks.unreadable."
 
-    private let availableMinutes = 45
-    
+    /// ホームで選べる空き時間（分）
+    nonisolated static let availableMinuteOptions = [15, 30, 45, 60, 90]
+    nonisolated static let defaultAvailableMinutes = 45
+
+    /// 空き時間に収まらないタスクがあるとき、取りかかれるようになる最小の選択肢
+    var suggestedAvailableMinutes: Int? {
+        guard let shortest = noRecommendationSummary?.shortestTooLongMinutes else {
+            return nil
+        }
+
+        return Self.availableMinuteOptions.first { $0 >= shortest }
+    }
+
     var todayTasks: [TaskItem] {
         tasks.filter { task in
             guard let scheduledDate = task.scheduledDate else {
@@ -49,6 +67,11 @@ final class HomeViewModel: ObservableObject {
     ) {
         self.userDefaults = userDefaults
 
+        let savedMinutes = userDefaults.integer(forKey: availableMinutesStorageKey)
+        if Self.availableMinuteOptions.contains(savedMinutes) {
+            availableMinutes = savedMinutes
+        }
+
         switch loadTasks() {
         case .loaded(let savedTasks):
             tasks = savedTasks
@@ -73,6 +96,17 @@ final class HomeViewModel: ObservableObject {
         #else
         return false
         #endif
+    }
+
+    /// 空き時間を変更し、推薦を計算し直す
+    func setAvailableMinutes(_ minutes: Int) {
+        guard minutes > 0, minutes != availableMinutes else {
+            return
+        }
+
+        availableMinutes = minutes
+        userDefaults.set(minutes, forKey: availableMinutesStorageKey)
+        updateRecommendation()
     }
 
     /// 新しいタスクを追加する
@@ -190,6 +224,10 @@ final class HomeViewModel: ObservableObject {
             from: tasks,
             context: context
         )
+
+        noRecommendationSummary = recommendation == nil
+            ? decisionEngine.summarizeNoRecommendation(from: tasks, context: context)
+            : nil
     }
 
     /// 開発中の動作確認用サンプルデータ

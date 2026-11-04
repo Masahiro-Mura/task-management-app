@@ -110,4 +110,61 @@ struct HomeViewModelTests {
         #expect(viewModel.tasks.first?.prerequisiteIDs.isEmpty == true)
         #expect(viewModel.recommendation?.task.id == writing.id)
     }
+
+    // MARK: - 空き時間
+
+    @Test
+    func availableMinutesDefaultsTo45() {
+        let viewModel = HomeViewModel(
+            userDefaults: makeUserDefaults(),
+            seedsSampleTasks: false
+        )
+
+        #expect(viewModel.availableMinutes == 45)
+    }
+
+    @Test
+    func changingAvailableMinutesUpdatesRecommendationAndIsSaved() {
+        let userDefaults = makeUserDefaults()
+        let viewModel = HomeViewModel(userDefaults: userDefaults, seedsSampleTasks: false)
+
+        viewModel.addTask(
+            title: "発表資料を作る",
+            estimatedMinutes: 60,
+            priority: .medium,
+            scheduledDate: nil,
+            deadline: nil
+        )
+
+        #expect(viewModel.recommendation == nil)
+        #expect(viewModel.noRecommendationSummary?.tooLongCount == 1)
+        #expect(viewModel.suggestedAvailableMinutes == 60)
+
+        viewModel.setAvailableMinutes(60)
+
+        #expect(viewModel.recommendation?.task.title == "発表資料を作る")
+        #expect(viewModel.noRecommendationSummary == nil)
+
+        let relaunched = HomeViewModel(userDefaults: userDefaults, seedsSampleTasks: false)
+        #expect(relaunched.availableMinutes == 60)
+    }
+
+    @Test
+    func noSuggestionWhenTaskIsLongerThanEveryOption() {
+        let viewModel = HomeViewModel(
+            userDefaults: makeUserDefaults(),
+            seedsSampleTasks: false
+        )
+
+        viewModel.addTask(
+            title: "引っ越しの準備",
+            estimatedMinutes: 240,
+            priority: .medium,
+            scheduledDate: nil,
+            deadline: nil
+        )
+
+        #expect(viewModel.noRecommendationSummary?.shortestTooLongMinutes == 240)
+        #expect(viewModel.suggestedAvailableMinutes == nil)
+    }
 }
