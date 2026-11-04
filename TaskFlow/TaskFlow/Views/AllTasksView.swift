@@ -11,13 +11,21 @@ struct AllTasksView: View {
     let onDelete: (TaskItem) -> Void
     let onUpdate: (TaskItem) -> Void
     var onWake: (TaskItem) -> Void = { _ in }
+    var onSplit: (TaskItem, [TaskSplitPart]) -> Void = { _, _ in }
 
     var body: some View {
         List(tasks) { task in
             NavigationLink {
-                EditTaskView(task: task) { updatedTask in
-                    onUpdate(updatedTask)
-                }
+                EditTaskView(
+                    task: task,
+                    allTasks: tasks,
+                    onSave: { updatedTask in
+                        onUpdate(updatedTask)
+                    },
+                    onSplit: { parts in
+                        onSplit(task, parts)
+                    }
+                )
             } label: {
                 TaskRowView(
                     task: task,

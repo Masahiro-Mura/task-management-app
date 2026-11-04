@@ -15,9 +15,9 @@
 TaskFlow/
   App/          TaskFlowApp.swift（エントリポイント）
   Models/       TaskItem, TaskPriority, DecisionContext
-  Services/     DecisionEngine（推薦ロジック。UIに依存しない純粋なロジック）
+  Services/     DecisionEngine（推薦ロジック）, PrerequisiteRules（前提に選べるタスク）, TaskSplitter（分解）。いずれもUIに依存しない純粋なロジック
   ViewModels/   HomeViewModel（タスク一覧・保存・推薦の更新）
-  Views/        ContentView(ホーム), AddTaskView, EditTaskView, AllTasksView
+  Views/        ContentView(ホーム), AddTaskView, EditTaskView, AllTasksView, SplitTaskView
   Components/   TaskRowView
 TaskFlowTests/      ロジックの単体テスト
 TaskFlowUITests/    UIテスト

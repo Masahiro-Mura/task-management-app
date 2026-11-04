@@ -217,7 +217,25 @@ final class HomeViewModel: ObservableObject {
         saveTasks()
         updateRecommendation()
     }
-    
+
+    /// 大きいタスクを、順番につながった小さいタスクに置き換える
+    func splitTask(_ task: TaskItem, into parts: [TaskSplitPart]) {
+        let splitTasks = TaskSplitter.split(
+            task,
+            into: parts,
+            in: tasks,
+            now: now()
+        )
+
+        guard splitTasks != tasks else {
+            return
+        }
+
+        tasks = splitTasks
+        saveTasks()
+        updateRecommendation()
+    }
+
     /// 指定したタスクを削除する
     func deleteTask(_ task: TaskItem) {
         tasks.removeAll { $0.id == task.id }

@@ -6,7 +6,11 @@ struct EditTaskView: View {
 
     let task: TaskItem
     let onSave: (TaskItem) -> Void
-    
+    let onSplit: ([TaskSplitPart]) -> Void
+
+    /// 前提として選べるタスク（自分自身と、循環するものを除く）
+    private let selectablePrerequisites: [TaskItem]
+
     @State private var title: String
     @State private var estimatedMinutes: Int
     @State private var priority: TaskPriority
@@ -14,14 +18,33 @@ struct EditTaskView: View {
     @State private var hasScheduledDate: Bool
     @State private var deadline: Date
     @State private var hasDeadline: Bool
-    
+    @State private var prerequisiteIDs: Set<UUID>
+    @State private var isShowingSplit = false
+
+    /// 分け方が決まったら、シートが閉じたあとに反映する
+    @State private var pendingSplit: [TaskSplitPart]?
+
+    /// - Parameters:
+    ///   - allTasks: 前提タスクの候補を選ぶための全タスク
+    ///   - onSplit: 「小さく分ける」で分け方が決まったときに呼ばれる
     init(
         task: TaskItem,
-        onSave: @escaping (TaskItem) -> Void = { _ in }
+        allTasks: [TaskItem],
+        onSave: @escaping (TaskItem) -> Void = { _ in },
+        onSplit: @escaping ([TaskSplitPart]) -> Void = { _ in }
     ) {
         self.task = task
         self.onSave = onSave
-        
+        self.onSplit = onSplit
+        self.selectablePrerequisites = PrerequisiteRules.selectablePrerequisites(
+            for: task,
+            in: allTasks
+        )
+
+        _prerequisiteIDs = State(
+            initialValue: Set(task.prerequisiteIDs)
+        )
+
         _title = State(
             initialValue: task.title
         )
@@ -98,8 +121,62 @@ struct EditTaskView: View {
                     )
                 }
             }
+
+            Section {
+                if selectablePrerequisites.isEmpty {
+                    Text("選べるタスクがありません")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(selectablePrerequisites) { candidate in
+                        Toggle(
+                            candidate.title,
+                            isOn: Binding(
+                                get: { prerequisiteIDs.contains(candidate.id) },
+                                set: { isOn in
+                                    if isOn {
+                                        prerequisiteIDs.insert(candidate.id)
+                                    } else {
+                                        prerequisiteIDs.remove(candidate.id)
+                                    }
+                                }
+                            )
+                        )
+                    }
+                }
+            } header: {
+                Text("先に終わらせるタスク")
+            } footer: {
+                Text("選んだタスクが終わるまで、このタスクはおすすめに出ません。")
+            }
+
+            if !task.isCompleted {
+                Section {
+                    Button("小さく分ける") {
+                        isShowingSplit = true
+                    }
+                } footer: {
+                    Text("空き時間に収まらない大きいタスクは、順番に取りかかれる小さいタスクに分けられます。")
+                }
+            }
         }
         .navigationTitle("タスク編集")
+        .sheet(
+            isPresented: $isShowingSplit,
+            onDismiss: {
+                guard let parts = pendingSplit else {
+                    return
+                }
+
+                pendingSplit = nil
+                onSplit(parts)
+                // 元のタスクはなくなるので、編集画面も閉じる
+                dismiss()
+            }
+        ) {
+            SplitTaskView(task: task) { parts in
+                pendingSplit = parts
+            }
+        }
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("保存") {
@@ -111,7 +188,10 @@ struct EditTaskView: View {
                         priority: priority,
                         scheduledDate: hasScheduledDate ? scheduledDate : nil,
                         deadline: hasDeadline ? deadline : nil,
-                        prerequisiteIDs: task.prerequisiteIDs
+                        // 一覧の順に並べ、選べなくなった前提（削除・循環）は外す
+                        prerequisiteIDs: selectablePrerequisites
+                            .map(\.id)
+                            .filter { prerequisiteIDs.contains($0) }
                     )
                     
                     onSave(updatedTask)
@@ -123,13 +203,19 @@ struct EditTaskView: View {
 }
 
 #Preview {
+    let task = TaskItem(
+        title: "論文を読む",
+        estimatedMinutes: 90,
+        scheduledDate: Date()
+    )
+
     NavigationStack {
         EditTaskView(
-            task: TaskItem(
-                title: "論文を読む",
-                estimatedMinutes: 30,
-                scheduledDate: Date()
-            )
+            task: task,
+            allTasks: [
+                task,
+                TaskItem(title: "論文を印刷する", estimatedMinutes: 10)
+            ]
         )
     }
 }

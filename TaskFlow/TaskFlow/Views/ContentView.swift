@@ -155,6 +155,9 @@ struct ContentView: View {
                             },
                             onWake: { task in
                                 viewModel.wakeTask(task)
+                            },
+                            onSplit: { task, parts in
+                                viewModel.splitTask(task, into: parts)
                             }
                         )
                     } label: {
@@ -262,6 +265,11 @@ struct ContentView: View {
 
                 if summary.dormantCount > 0 {
                     Text("冬眠中のタスクが\(summary.dormantCount)件あります（「すべてのタスク」から起こせます）")
+                }
+
+                if summary.tooLongCount > 0 {
+                    Text("大きいタスクは、「すべてのタスク」の編集画面から小さく分けられます")
+                        .foregroundStyle(.secondary)
                 }
 
                 if let suggested = viewModel.suggestedAvailableMinutes {
