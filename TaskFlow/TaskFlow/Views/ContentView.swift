@@ -98,6 +98,7 @@ struct ContentView: View {
                             ForEach(viewModel.todayTasks) { task in
                                 TaskRowView(
                                     task: task,
+                                    note: viewModel.isCarriedOver(task) ? "持ち越し" : nil,
                                     onToggleCompletion: {
                                         viewModel.toggleCompletion(for: task)
                                     }
@@ -142,6 +143,7 @@ struct ContentView: View {
                     NavigationLink {
                         AllTasksView(
                             tasks: viewModel.allTasks,
+                            dormantTaskIDs: viewModel.dormantTaskIDs,
                             onToggleCompletion: { task in
                                 viewModel.toggleCompletion(for: task)
                             },
@@ -150,6 +152,9 @@ struct ContentView: View {
                             },
                             onUpdate: { updatedTask in
                                 viewModel.updateTask(updatedTask)
+                            },
+                            onWake: { task in
+                                viewModel.wakeTask(task)
                             }
                         )
                     } label: {
@@ -253,6 +258,10 @@ struct ContentView: View {
 
                 if summary.waitingForPrerequisitesCount > 0 {
                     Text("前提タスクの完了を待っているタスクが\(summary.waitingForPrerequisitesCount)件あります")
+                }
+
+                if summary.dormantCount > 0 {
+                    Text("冬眠中のタスクが\(summary.dormantCount)件あります（「すべてのタスク」から起こせます）")
                 }
 
                 if let suggested = viewModel.suggestedAvailableMinutes {

@@ -5,7 +5,8 @@ import Testing
 struct DecisionEngineTests {
 
     private let engine = DecisionEngine()
-    private let now = Date(timeIntervalSince1970: 1_800_000_000)
+    // タスクの updatedAt は作成時刻になるため、冬眠と判定されないよう現在時刻を基準にする
+    private let now = Date()
 
     private func recommend(
         _ tasks: [TaskItem],
@@ -133,7 +134,7 @@ struct DecisionEngineTests {
 
         #expect(result?.task.id == overdue.id)
         #expect(result?.factor == .earlierDeadline)
-        #expect(result?.reason.contains("期限を過ぎていて") == true)
+        #expect(result?.reason == "期限は過ぎていますが、所要時間20分が空き時間45分に収まるので、今なら片づけられます。")
     }
 
     @Test
@@ -352,6 +353,7 @@ struct DecisionEngineTests {
 
         #expect(summary == NoRecommendationSummary(
             incompleteCount: 3,
+            dormantCount: 0,
             waitingForPrerequisitesCount: 1,
             tooLongCount: 2,
             shortestTooLongMinutes: 60
@@ -368,5 +370,40 @@ struct DecisionEngineTests {
         #expect(summary.allCompleted)
         #expect(summary.tooLongCount == 0)
         #expect(summary.shortestTooLongMinutes == nil)
+    }
+
+    // MARK: - 冬眠
+
+    private var fifteenDaysAgo: Date {
+        now.addingTimeInterval(-60 * 60 * 24 * 15)
+    }
+
+    @Test
+    func dormantTaskIsNotRecommended() {
+        let dormant = TaskItem(
+            title: "放置",
+            estimatedMinutes: 5,
+            priority: .high,
+            updatedAt: fifteenDaysAgo
+        )
+        let active = TaskItem(title: "最近", estimatedMinutes: 30)
+
+        #expect(recommend([dormant, active])?.task.id == active.id)
+        #expect(recommend([dormant]) == nil)
+    }
+
+    @Test
+    func summaryCountsDormantTasksSeparately() {
+        let dormant = TaskItem(
+            title: "放置",
+            estimatedMinutes: 5,
+            updatedAt: fifteenDaysAgo
+        )
+
+        let summary = summarize([dormant])
+
+        #expect(summary.incompleteCount == 0)
+        #expect(summary.dormantCount == 1)
+        #expect(!summary.allCompleted)
     }
 }

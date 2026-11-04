@@ -27,8 +27,11 @@ struct TaskRecommendation {
 
 /// 推薦できるタスクがないときの内訳
 struct NoRecommendationSummary: Equatable {
-    /// 未完了のタスク数
+    /// 未完了のタスク数（冬眠中を除く）
     var incompleteCount: Int
+
+    /// 冬眠中のタスク数
+    var dormantCount: Int
 
     /// 前提タスクの完了待ちの件数
     var waitingForPrerequisitesCount: Int
@@ -40,7 +43,7 @@ struct NoRecommendationSummary: Equatable {
     var shortestTooLongMinutes: Int?
 
     var allCompleted: Bool {
-        incompleteCount == 0
+        incompleteCount == 0 && dormantCount == 0
     }
 }
 
@@ -66,6 +69,7 @@ struct DecisionEngine {
         let incompleteTaskIDs = incompleteTaskIDs(in: tasks)
 
         let candidates = tasks
+            .filter { !$0.isDormant(at: context.currentDate) }
             .filter { task in
                 isExecutable(
                     task,
@@ -115,13 +119,23 @@ struct DecisionEngine {
         context: DecisionContext
     ) -> NoRecommendationSummary {
 
-        let incompleteTasks = tasks.filter { !$0.isCompleted }
         let incompleteTaskIDs = incompleteTaskIDs(in: tasks)
+
+        var activeTasks: [TaskItem] = []
+        var dormantCount = 0
+
+        for task in tasks where !task.isCompleted {
+            if task.isDormant(at: context.currentDate) {
+                dormantCount += 1
+            } else {
+                activeTasks.append(task)
+            }
+        }
 
         var waitingCount = 0
         var tooLongMinutes: [Int] = []
 
-        for task in incompleteTasks {
+        for task in activeTasks {
             if !prerequisitesAreCompleted(task, incompleteTaskIDs: incompleteTaskIDs) {
                 waitingCount += 1
             } else if task.estimatedMinutes > context.availableMinutes {
@@ -130,7 +144,8 @@ struct DecisionEngine {
         }
 
         return NoRecommendationSummary(
-            incompleteCount: incompleteTasks.count,
+            incompleteCount: activeTasks.count,
+            dormantCount: dormantCount,
             waitingForPrerequisitesCount: waitingCount,
             tooLongCount: tooLongMinutes.count,
             shortestTooLongMinutes: tooLongMinutes.min()
@@ -236,6 +251,11 @@ struct DecisionEngine {
         context: DecisionContext
     ) -> String {
 
+        // 期限切れは責めず、今なら片づけられることを伝える
+        if let deadline = task.deadline, deadline <= context.currentDate {
+            return "期限は過ぎていますが、所要時間\(task.estimatedMinutes)分が空き時間\(context.availableMinutes)分に収まるので、今なら片づけられます。"
+        }
+
         let fit = "所要時間\(task.estimatedMinutes)分が空き時間\(context.availableMinutes)分に収まるからです。"
 
         guard let lead = leadPhrase(
@@ -286,11 +306,8 @@ struct DecisionEngine {
     }
 
     private func remainingTimePhrase(until deadline: Date, now: Date) -> String {
-        let remaining = deadline.timeIntervalSince(now)
-
-        guard remaining > 0 else {
-            return "期限を過ぎていて"
-        }
+        // 期限切れは makeReason で別の文にしているので、ここでは残り時間が正の場合だけを扱う
+        let remaining = max(deadline.timeIntervalSince(now), 0)
 
         let minutes = Int((remaining / 60).rounded(.up))
         if minutes < 60 {

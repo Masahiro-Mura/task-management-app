@@ -6,9 +6,11 @@ struct AllTasksView: View {
     @State private var showingDeleteConfirmation = false
 
     let tasks: [TaskItem]
+    var dormantTaskIDs: Set<UUID> = []
     let onToggleCompletion: (TaskItem) -> Void
     let onDelete: (TaskItem) -> Void
     let onUpdate: (TaskItem) -> Void
+    var onWake: (TaskItem) -> Void = { _ in }
 
     var body: some View {
         List(tasks) { task in
@@ -19,10 +21,23 @@ struct AllTasksView: View {
             } label: {
                 TaskRowView(
                     task: task,
+                    note: dormantTaskIDs.contains(task.id)
+                        ? "冬眠中（右へスワイプで起こす）"
+                        : nil,
                     onToggleCompletion: {
                         onToggleCompletion(task)
                     }
                 )
+            }
+            .swipeActions(edge: .leading) {
+                if dormantTaskIDs.contains(task.id) {
+                    Button {
+                        onWake(task)
+                    } label: {
+                        Label("起こす", systemImage: "sun.max")
+                    }
+                    .tint(.orange)
+                }
             }
             .swipeActions(edge: .trailing) {
                 Button(role: .destructive) {

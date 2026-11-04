@@ -7,12 +7,11 @@ struct HomeViewModelTests {
 
     private let tasksKey = "taskFlow.tasks"
 
-    /// テストごとに独立した保存先を用意する
+    /// テストごとに独立した保存先。テストが終わると消える
+    private let storage = TemporaryUserDefaults(prefix: "HomeViewModelTests")
+
     private func makeUserDefaults() -> UserDefaults {
-        let suiteName = "HomeViewModelTests.\(UUID().uuidString)"
-        let userDefaults = UserDefaults(suiteName: suiteName)!
-        userDefaults.removePersistentDomain(forName: suiteName)
-        return userDefaults
+        storage.userDefaults
     }
 
     private func unreadableBackupKeys(in userDefaults: UserDefaults) -> [String] {
