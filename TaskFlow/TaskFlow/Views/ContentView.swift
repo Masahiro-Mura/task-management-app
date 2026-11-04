@@ -69,7 +69,7 @@ struct ContentView: View {
                             RoundedRectangle(cornerRadius: 16)
                                 .stroke(.blue.opacity(0.4), lineWidth: 1)
                         }
-                    } else {
+                    } else if !viewModel.tasks.isEmpty {
                         ContentUnavailableView(
                             "実行できるタスクがありません",
                             systemImage: "checkmark.circle"

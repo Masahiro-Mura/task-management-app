@@ -8,7 +8,11 @@ final class HomeViewModel: ObservableObject {
     @Published private(set) var recommendation: TaskRecommendation?
 
     private let decisionEngine = DecisionEngine()
+    private let userDefaults: UserDefaults
     private let tasksStorageKey = "taskFlow.tasks"
+
+    /// 読み込めなかった保存データの退避先キーの接頭辞
+    static let unreadableTasksKeyPrefix = "taskFlow.tasks.unreadable."
 
     private let availableMinutes = 45
     
@@ -36,14 +40,39 @@ final class HomeViewModel: ObservableObject {
         tasks
     }
 
-    init() {
-        if let savedTasks = loadTasks() {
+    /// - Parameters:
+    ///   - userDefaults: タスクの保存先。テストでは専用のスイートを渡す
+    ///   - seedsSampleTasks: 保存データがないときにサンプルタスクを入れるか
+    init(
+        userDefaults: UserDefaults = .standard,
+        seedsSampleTasks: Bool = HomeViewModel.seedsSampleTasksByDefault
+    ) {
+        self.userDefaults = userDefaults
+
+        switch loadTasks() {
+        case .loaded(let savedTasks):
             tasks = savedTasks
-        } else {
-            loadSampleTasks()
+
+        case .notFound:
+            if seedsSampleTasks {
+                loadSampleTasks()
+            }
+
+        case .unreadable(let data):
+            // 次の保存で上書きされて失われないよう、元のデータを退避しておく
+            backUpUnreadableTasks(data)
         }
 
         updateRecommendation()
+    }
+
+    /// サンプルタスクは開発中のビルドでのみ入れる
+    nonisolated static var seedsSampleTasksByDefault: Bool {
+        #if DEBUG
+        return true
+        #else
+        return false
+        #endif
     }
 
     /// 新しいタスクを追加する
@@ -81,6 +110,12 @@ final class HomeViewModel: ObservableObject {
     /// 指定したタスクを削除する
     func deleteTask(_ task: TaskItem) {
         tasks.removeAll { $0.id == task.id }
+
+        // 削除したタスクを前提にしていたタスクが、推薦されないまま残らないようにする
+        for index in tasks.indices {
+            tasks[index].prerequisiteIDs.removeAll { $0 == task.id }
+        }
+
         saveTasks()
         updateRecommendation()
     }
@@ -104,21 +139,44 @@ final class HomeViewModel: ObservableObject {
             return
         }
 
-        UserDefaults.standard.set(data, forKey: tasksStorageKey)
+        userDefaults.set(data, forKey: tasksStorageKey)
     }
-    
+
+    private enum LoadResult {
+        case loaded([TaskItem])
+        case notFound
+        case unreadable(Data)
+    }
+
     /// UserDefaultsから保存済みのタスク一覧を読み込む
-    private func loadTasks() -> [TaskItem]? {
-        guard let data = UserDefaults.standard.data(
+    private func loadTasks() -> LoadResult {
+        guard let data = userDefaults.data(
             forKey: tasksStorageKey
         ) else {
-            return nil
+            return .notFound
         }
 
-        return try? JSONDecoder().decode(
+        guard let savedTasks = try? JSONDecoder().decode(
             [TaskItem].self,
             from: data
+        ) else {
+            return .unreadable(data)
+        }
+
+        return .loaded(savedTasks)
+    }
+
+    /// 読み込めなかった保存データを、日時つきの別キーへ退避する
+    private func backUpUnreadableTasks(_ data: Data) {
+        let timestamp = ISO8601DateFormatter().string(from: Date())
+
+        userDefaults.set(
+            data,
+            forKey: Self.unreadableTasksKeyPrefix + timestamp
         )
+
+        // 起動のたびに同じデータを退避し直さないよう、元のキーは空にする
+        userDefaults.removeObject(forKey: tasksStorageKey)
     }
 
     /// 現在のタスク一覧から推薦を再計算する

@@ -4,16 +4,13 @@ struct TaskRowView: View {
 
     let task: TaskItem
     let onToggleCompletion: () -> Void
-    let onDelete: () -> Void
-    
+
     init(
         task: TaskItem,
-        onToggleCompletion: @escaping () -> Void = {},
-        onDelete: @escaping () -> Void = {}
+        onToggleCompletion: @escaping () -> Void = {}
     ) {
         self.task = task
         self.onToggleCompletion = onToggleCompletion
-        self.onDelete = onDelete
     }
 
     var body: some View {
@@ -42,14 +39,6 @@ struct TaskRowView: View {
             }
 
             Spacer()
-            
-            Button(role: .destructive) {
-                onDelete()
-            } label: {
-                Image(systemName: "trash")
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("タスクを削除")
         }
         .padding(.vertical, 4)
     }

@@ -20,16 +20,18 @@ struct DecisionEngine {
         context: DecisionContext
     ) -> TaskRecommendation? {
 
-        let completedTaskIDs = Set(
+        // 未完了のタスクだけが前提として待つ対象になる。
+        // 完了済みや、削除されて一覧に存在しない前提は満たされているとみなす
+        let incompleteTaskIDs = Set(
             tasks
-                .filter(\.isCompleted)
+                .filter { !$0.isCompleted }
                 .map(\.id)
         )
 
         let executableTasks = tasks.filter { task in
             isExecutable(
                 task,
-                completedTaskIDs: completedTaskIDs,
+                incompleteTaskIDs: incompleteTaskIDs,
                 availableMinutes: context.availableMinutes
             )
         }
@@ -52,7 +54,7 @@ struct DecisionEngine {
     /// タスクが現在実行可能か判定する
     private func isExecutable(
         _ task: TaskItem,
-        completedTaskIDs: Set<UUID>,
+        incompleteTaskIDs: Set<UUID>,
         availableMinutes: Int
     ) -> Bool {
 
@@ -65,7 +67,7 @@ struct DecisionEngine {
         }
 
         let prerequisitesAreCompleted = task.prerequisiteIDs.allSatisfy {
-            completedTaskIDs.contains($0)
+            !incompleteTaskIDs.contains($0)
         }
 
         return prerequisitesAreCompleted
