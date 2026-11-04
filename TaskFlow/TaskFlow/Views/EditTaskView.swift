@@ -9,6 +9,7 @@ struct EditTaskView: View {
     
     @State private var title: String
     @State private var estimatedMinutes: Int
+    @State private var priority: TaskPriority
     @State private var scheduledDate: Date
     @State private var hasScheduledDate: Bool
     @State private var deadline: Date
@@ -26,6 +27,9 @@ struct EditTaskView: View {
         )
         _estimatedMinutes = State(
             initialValue: task.estimatedMinutes
+        )
+        _priority = State(
+            initialValue: task.priority
         )
         _scheduledDate = State(
             initialValue: task.scheduledDate ?? Date()

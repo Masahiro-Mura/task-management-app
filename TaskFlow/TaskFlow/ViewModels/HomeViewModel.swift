@@ -50,12 +50,14 @@ final class HomeViewModel: ObservableObject {
     func addTask(
         title: String,
         estimatedMinutes: Int,
+        priority: TaskPriority,
         scheduledDate: Date?,
         deadline: Date?
     ) {
         let task = TaskItem(
             title: title,
             estimatedMinutes: estimatedMinutes,
+            priority: priority,
             scheduledDate: scheduledDate,
             deadline: deadline
         )

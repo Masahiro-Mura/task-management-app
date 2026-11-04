@@ -6,6 +6,7 @@ struct AddTaskView: View {
 
     @State private var title = ""
     @State private var estimatedMinutes = 30
+    @State private var priority: TaskPriority = .medium
     
     @State private var hasScheduledDate = false
     @State private var scheduledDate = Date()
@@ -13,7 +14,7 @@ struct AddTaskView: View {
     @State private var hasDeadline = false
     @State private var deadline = Date()
 
-    let onSave: (String, Int, Date?, Date?) -> Void
+    let onSave: (String, Int, TaskPriority, Date?, Date?) -> Void
 
     var body: some View {
         NavigationStack {
@@ -29,6 +30,16 @@ struct AddTaskView: View {
                         in: 5...240,
                         step: 5
                     )
+                }
+                
+                Section("優先度") {
+                    Picker("優先度", selection: $priority) {
+                        ForEach(TaskPriority.allCases, id: \.self) { priority in
+                            Text(priority.displayName)
+                                .tag(priority)
+                        }
+                    }
+                    .pickerStyle(.segmented)
                 }
                 
                 Section("実施予定日") {
@@ -72,6 +83,7 @@ struct AddTaskView: View {
                         onSave(
                             trimmedTitle,
                             estimatedMinutes,
+                            priority,
                             hasScheduledDate ? scheduledDate : nil,
                             hasDeadline ? deadline : nil
                         )
@@ -90,5 +102,5 @@ struct AddTaskView: View {
 }
 
 #Preview {
-    AddTaskView { _, _, _, _ in }
+    AddTaskView { _, _, _, _, _ in }
 }

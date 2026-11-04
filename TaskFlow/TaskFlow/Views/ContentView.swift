@@ -182,10 +182,11 @@ struct ContentView: View {
                 }
             }
             .sheet(isPresented: $isShowingAddTask) {
-                AddTaskView { title, estimatedMinutes, scheduledDate, deadline in
+                AddTaskView { title, estimatedMinutes, priority, scheduledDate, deadline in
                     viewModel.addTask(
                         title: title,
                         estimatedMinutes: estimatedMinutes,
+                        priority: priority,
                         scheduledDate: scheduledDate,
                         deadline: deadline
                     )
