@@ -255,17 +255,21 @@ struct DecisionEngine {
         now: Date
     ) -> String? {
 
-        let isOverdue = task.deadline.map { $0 <= now } ?? false
+        // 期限が24時間以内なら、決め手が何であっても残り時間を一番に伝える
+        if isUrgent(task, now: now), let deadline = task.deadline {
+            return remainingTimePhrase(until: deadline, now: now)
+        }
 
         switch factor {
         case .onlyCandidate:
             return "今取りかかれるのはこのタスクだけで"
 
         case .urgentDeadline:
-            return task.deadline.map { remainingTimePhrase(until: $0, now: now) }
+            // 急ぎのタスクは上で処理済み
+            return nil
 
         case .earlierDeadline:
-            return isOverdue ? "期限を過ぎていて" : "ほかのタスクより期限が早く"
+            return "ほかのタスクより期限が早く"
 
         case .hasDeadline:
             return "期限が決まっていて"

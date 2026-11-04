@@ -250,6 +250,56 @@ struct DecisionEngineTests {
     }
 
     @Test
+    func reasonShowsRemainingTimeForOnlyCandidateDueSoon() {
+        let urgent = TaskItem(
+            title: "急ぎ",
+            estimatedMinutes: 30,
+            deadline: now.addingTimeInterval(60 * 40)
+        )
+
+        let result = recommend([urgent])
+
+        #expect(result?.factor == .onlyCandidate)
+        #expect(result?.reason == "期限まであと40分で、所要時間30分が空き時間45分に収まるからです。")
+    }
+
+    @Test
+    func reasonShowsRemainingTimeWhenBothCandidatesAreUrgent() {
+        let sooner = TaskItem(
+            title: "先",
+            estimatedMinutes: 30,
+            deadline: now.addingTimeInterval(60 * 60)
+        )
+        let later = TaskItem(
+            title: "後",
+            estimatedMinutes: 15,
+            deadline: now.addingTimeInterval(60 * 60 * 23)
+        )
+
+        let result = recommend([later, sooner])
+
+        #expect(result?.task.id == sooner.id)
+        #expect(result?.factor == .earlierDeadline)
+        #expect(result?.reason == "期限まであと1時間で、所要時間30分が空き時間45分に収まるからです。")
+    }
+
+    @Test
+    func reasonForEarlierDeadlineWhenNotUrgent() {
+        let sooner = TaskItem(
+            title: "先",
+            estimatedMinutes: 30,
+            deadline: now.addingTimeInterval(60 * 60 * 24 * 2)
+        )
+        let later = TaskItem(
+            title: "後",
+            estimatedMinutes: 15,
+            deadline: now.addingTimeInterval(60 * 60 * 24 * 5)
+        )
+
+        #expect(recommend([later, sooner])?.reason == "ほかのタスクより期限が早く、所要時間30分が空き時間45分に収まるからです。")
+    }
+
+    @Test
     func reasonWhenChosenTaskIsShorter() {
         let shorter = TaskItem(title: "短い", estimatedMinutes: 10)
         let longer = TaskItem(title: "長い", estimatedMinutes: 30)
