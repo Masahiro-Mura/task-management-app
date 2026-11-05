@@ -135,6 +135,7 @@ struct SettingsView: View {
                         onRestore: { viewModel.restoreArchived($0) },
                         onDelete: { viewModel.deleteArchived($0) }
                     )
+                    .undoBanner()
                 } label: {
                     LabeledContent("保管したタスク", value: String(localized: "\(viewModel.archivedTasks.count)件"))
                 }
@@ -274,7 +275,6 @@ struct TaskArchiveListView: View {
     var onRestore: (TaskItem) -> Void = { _ in }
     var onDelete: ((TaskItem) -> Void)? = nil
 
-    @State private var deleting: TaskItem?
 
     var body: some View {
         List {
@@ -303,8 +303,9 @@ struct TaskArchiveListView: View {
                     }
                     .swipeActions(edge: .trailing) {
                         if onDelete != nil {
+                            // すぐ消して、画面の下の「元に戻す」で戻せるようにする
                             Button(role: .destructive) {
-                                deleting = task
+                                onDelete?(task)
                             } label: {
                                 Label("削除", systemImage: "trash")
                             }
@@ -314,25 +315,6 @@ struct TaskArchiveListView: View {
             }
         }
         .navigationTitle(title)
-        .alert(
-            "このタスクを削除しますか？",
-            isPresented: Binding(
-                get: { deleting != nil },
-                set: { if !$0 { deleting = nil } }
-            ),
-            presenting: deleting
-        ) { task in
-            Button("削除", role: .destructive) {
-                onDelete?(task)
-                deleting = nil
-            }
-
-            Button("キャンセル", role: .cancel) {
-                deleting = nil
-            }
-        } message: { task in
-            Text("「\(task.title)」は元に戻せません。")
-        }
     }
 }
 

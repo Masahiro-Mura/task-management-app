@@ -115,7 +115,7 @@ struct EasySplitTests {
         viewModel.addFirstStep(for: big, title: "机の上", minutes: 10)
 
         viewModel.completeRecommendation()
-        viewModel.undoLastCompletion()
+        viewModel.undo()
 
         #expect(viewModel.nextStepCandidate == nil)
     }

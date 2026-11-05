@@ -21,7 +21,7 @@ TaskFlow/
   ViewModels/   HomeViewModel（タスク一覧・保存・推薦の更新）
   Views/        ContentView(ホーム), AddTaskView, EditTaskView, AllTasksView, SplitTaskView, FocusView（集中画面）, DoneTodayView（今日やったこと）, CarryOverView（持ち越しの整理）, FirstStepView（一歩を足す）, StepsView（一歩の一覧）, RecurringListView（くり返し）, SettingsView（設定・保管・手放す・データ）, OnboardingView（初回の案内）
   Resources/    Localizable.xcstrings（画面の文言と10言語の訳）, AppShortcuts.xcstrings（Siri の呼び方）, ja.lproj
-  Components/   TaskRowView, CelebrationView（完了のお祝い）, PrioritySection（「高」は3件まで）, RecurrenceSection（くり返しの選択）
+  Components/   UndoBanner（どの画面でも出す「元に戻す」）, TaskRowView, CelebrationView（完了のお祝い）, PrioritySection（「高」は3件まで）, RecurrenceSection（くり返しの選択）
 Extensions/         ウィジェット・共有シートのコード（ターゲットを足すまでの置き場。手順は Extensions/README.md）
 TaskFlowTests/      ロジックの単体テスト
 TaskFlowUITests/    UIテスト
@@ -57,6 +57,7 @@ UIの見た目の確認はXcodeのPreview/シミュレータで人が行う。�
 - 推薦ロジック(`DecisionEngine`)はViewやUserDefaultsに触れない。入力は `[TaskItem]` と `DecisionContext`、出力は `TaskRecommendation?`。現在時刻は `DecisionContext.currentDate` で注入し、テストで固定できるようにする。
 - 推薦には必ず理由文(`reason`)を付ける。理由を出せない判断は入れない。
 - 状態の変更は `HomeViewModel` を経由し、変更のたびに `saveTasks()` → `updateRecommendation()` を呼ぶ。
+- ユーザーの操作で状態を変える `HomeViewModel` の関数は、`undoable("何をしたか") { … }` で包む（すぐ「元に戻す」で戻せるように）。画面からいくつかの関数を続けて呼ぶ1つの操作は、`performAsOne` でまとめる。新しい画面には `.undoBanner()` を付ける
 - `TaskItem` の `Codable` は後方互換を保つ。フィールドを足すときは `init(from:)` で `decodeIfPresent` を使い、既存の保存データを壊さない。
 - 日本の祝日（`JapaneseHolidays`）は年に1回、次の年を足す。
 - 文言を足したら、すべての言語の訳も `Localizable.xcstrings` に足す。SwiftUI の `Text("…")` などはそのまま拾われる。`String` として使う文言は `String(localized: "…")` にする。文をつないで作らない（言語で語順が変わるため、つないだ形ごと1つの文言にする）

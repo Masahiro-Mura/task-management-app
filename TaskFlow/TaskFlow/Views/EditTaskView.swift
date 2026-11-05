@@ -5,9 +5,9 @@ struct EditTaskView: View {
     @Environment(\.dismiss) private var dismiss
 
     let task: TaskItem
-    let onSave: (TaskItem) -> Void
+    /// 保存するとき。2つ目は、優先度「高」を付けるために「中」に戻すタスク（なければ nil）
+    let onSave: (TaskItem, UUID?) -> Void
     let onSplit: ([TaskSplitPart]) -> Void
-    let onLowerPriority: (UUID) -> Void
     let onAddFirstStep: (String, Int) -> Void
     let onDelete: (() -> Void)?
 
@@ -34,24 +34,20 @@ struct EditTaskView: View {
     /// 分け方が決まったら、シートが閉じたあとに反映する
     @State private var pendingSplit: [TaskSplitPart]?
 
-    @State private var isConfirmingDelete = false
-
     /// - Parameters:
     ///   - allTasks: 前提タスクの候補を選ぶための全タスク
     ///   - onSplit: 「小さく分ける」で分け方が決まったときに呼ばれる
     init(
         task: TaskItem,
         allTasks: [TaskItem],
-        onSave: @escaping (TaskItem) -> Void = { _ in },
+        onSave: @escaping (TaskItem, UUID?) -> Void = { _, _ in },
         onSplit: @escaping ([TaskSplitPart]) -> Void = { _ in },
-        onLowerPriority: @escaping (UUID) -> Void = { _ in },
         onAddFirstStep: @escaping (String, Int) -> Void = { _, _ in },
         onDelete: (() -> Void)? = nil
     ) {
         self.task = task
         self.onSave = onSave
         self.onSplit = onSplit
-        self.onLowerPriority = onLowerPriority
         self.onAddFirstStep = onAddFirstStep
         self.onDelete = onDelete
         self.selectablePrerequisites = PrerequisiteRules.selectablePrerequisites(
@@ -195,26 +191,16 @@ struct EditTaskView: View {
 
             if onDelete != nil {
                 Section {
+                    // すぐ消して、戻った画面の「元に戻す」で戻せるようにする
                     Button("このタスクを削除", role: .destructive) {
-                        isConfirmingDelete = true
+                        onDelete?()
+                        dismiss()
                     }
                     .accessibilityIdentifier("deleteTaskButton")
                 }
             }
         }
         .navigationTitle("タスク編集")
-        .confirmationDialog(
-            "「\(task.title)」を削除しますか？",
-            isPresented: $isConfirmingDelete,
-            titleVisibility: .visible
-        ) {
-            Button("削除", role: .destructive) {
-                onDelete?()
-                dismiss()
-            }
-        } message: {
-            Text("一歩があれば、一緒に消えます。")
-        }
         .sheet(isPresented: $isShowingFirstStep) {
             FirstStepView(task: task) { title, minutes in
                 onAddFirstStep(title, minutes)
@@ -257,11 +243,8 @@ struct EditTaskView: View {
                         : nil
                     updatedTask.isLight = isLight
 
-                    if priority == .high, let lowering {
-                        onLowerPriority(lowering)
-                    }
-                    
-                    onSave(updatedTask)
+                    // 優先度を下げるのと保存は、1回の「元に戻す」で戻せるよう一緒に渡す
+                    onSave(updatedTask, priority == .high ? lowering : nil)
                     dismiss()
                 }
             }

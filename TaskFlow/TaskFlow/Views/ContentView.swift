@@ -33,11 +33,6 @@ struct ContentView: View {
     /// 推薦を計算し直す間隔。期限までの残り時間などを時間経過に合わせて更新する
     private let refreshInterval: Duration = .seconds(60)
 
-    /// 完了後に「元に戻す」を出しておく時間
-    private let undoDuration: Duration = .seconds(5)
-
-    /// 「あとで」の知らせを出しておく時間（「やっぱり今やる」を押せるよう、少し長め）
-    private let skipFeedbackDuration: Duration = .seconds(8)
 
     /// 広い画面での中身の最大の幅
     private static let readableWidth: CGFloat = 640
@@ -81,6 +76,11 @@ struct ContentView: View {
                         }
                         .animation(.easeInOut(duration: 0.25), value: viewModel.recommendation?.task.id)
 
+                        // 「あとで」にしたものも、1時間待たずにいつでも戻せる
+                        if viewModel.recommendation != nil, viewModel.skippedTaskCount > 0 {
+                            skippedRow
+                        }
+
                         todaySection
 
                         doneTodayRow
@@ -107,8 +107,7 @@ struct ContentView: View {
             }
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 10) {
-                    bottomBanner
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    UndoBanner(viewModel: viewModel)
 
                     if isQuickAddOpen {
                         quickAddBar
@@ -122,9 +121,6 @@ struct ContentView: View {
                 .padding(.bottom, 8)
                 .frame(maxWidth: Self.readableWidth)
                 .frame(maxWidth: .infinity)
-                .animation(.easeInOut(duration: 0.2), value: viewModel.lastCompletedTask?.id)
-                .animation(.easeInOut(duration: 0.2), value: viewModel.lastDeleted?.main.id)
-                .animation(.easeInOut(duration: 0.2), value: viewModel.lastSkippedTask?.id)
                 .animation(.spring(duration: 0.3), value: isQuickAddOpen)
             }
             .navigationTitle("今やること")
@@ -136,11 +132,13 @@ struct ContentView: View {
                         Image(systemName: "list.bullet")
                     }
                     .accessibilityLabel("すべてのタスク")
+                    .accessibilityIdentifier("allTasksButton")
                 }
 
                 ToolbarItem(placement: .topBarLeading) {
                     NavigationLink {
                         SettingsView(viewModel: viewModel)
+                            .undoBanner()
                     } label: {
                         Image(systemName: "gearshape")
                     }
@@ -156,34 +154,37 @@ struct ContentView: View {
                 AddTaskView(
                     otherHighPriorityTasks: viewModel.otherHighPriorityTasks(excluding: nil)
                 ) { newTask in
-                    if let lowering = newTask.lowering {
-                        viewModel.lowerPriority(of: lowering)
-                    }
+                    // 優先度を下げるのと足すのは、1回の「元に戻す」で戻せるようにまとめる
+                    viewModel.performAsOne(String(localized: "「\(newTask.title)」を足しました。")) {
+                        if let lowering = newTask.lowering {
+                            viewModel.lowerPriority(of: lowering)
+                        }
 
-                    if let recurrence = newTask.recurrence {
-                        viewModel.addRecurring(
-                            title: newTask.title,
-                            estimatedMinutes: newTask.estimatedMinutes,
-                            priority: newTask.priority,
-                            isLight: newTask.isLight,
-                            recurrence: recurrence
-                        )
-                        return
+                        if let recurrence = newTask.recurrence {
+                            viewModel.addRecurring(
+                                title: newTask.title,
+                                estimatedMinutes: newTask.estimatedMinutes,
+                                priority: newTask.priority,
+                                isLight: newTask.isLight,
+                                recurrence: recurrence
+                            )
+                        } else {
+                            viewModel.addTask(
+                                title: newTask.title,
+                                estimatedMinutes: newTask.estimatedMinutes,
+                                priority: newTask.priority,
+                                scheduledDate: newTask.scheduledDate,
+                                deadline: newTask.deadline,
+                                isLight: newTask.isLight
+                            )
+                        }
                     }
-
-                    viewModel.addTask(
-                        title: newTask.title,
-                        estimatedMinutes: newTask.estimatedMinutes,
-                        priority: newTask.priority,
-                        scheduledDate: newTask.scheduledDate,
-                        deadline: newTask.deadline,
-                        isLight: newTask.isLight
-                    )
                 }
             }
             .sheet(item: $firstStepTask) { task in
                 // 一歩から開いたときは、その元のタスクの一歩の一覧を出す
                 StepsView(viewModel: viewModel, parentID: task.parentTaskID ?? task.id)
+                    .undoBanner()
             }
             .fullScreenCover(
                 isPresented: Binding(
@@ -279,39 +280,6 @@ struct ContentView: View {
                     }
                 }
             }
-            .task(id: viewModel.lastCompletedTask?.id) {
-                guard viewModel.lastCompletedTask != nil else {
-                    return
-                }
-
-                try? await Task.sleep(for: undoDuration)
-
-                if !Task.isCancelled {
-                    viewModel.dismissUndo()
-                }
-            }
-            .task(id: viewModel.lastDeleted?.main.id) {
-                guard viewModel.lastDeleted != nil else {
-                    return
-                }
-
-                try? await Task.sleep(for: undoDuration)
-
-                if !Task.isCancelled {
-                    viewModel.dismissDeleteUndo()
-                }
-            }
-            .task(id: viewModel.lastSkippedTask?.id) {
-                guard viewModel.lastSkippedTask != nil else {
-                    return
-                }
-
-                try? await Task.sleep(for: skipFeedbackDuration)
-
-                if !Task.isCancelled {
-                    viewModel.dismissSkipFeedback()
-                }
-            }
             .onChange(of: viewModel.recommendation?.task.id) { _, _ in
                 isShowingFullReason = false
             }
@@ -323,6 +291,8 @@ struct ContentView: View {
                 }
             }
         }
+        // 一覧・編集・設定・シートでも「元に戻す」を出せるように、画面の奥まで ViewModel を渡す
+        .environment(\.homeViewModel, viewModel)
     }
 
     // MARK: - タスクがないとき
@@ -455,6 +425,22 @@ struct ContentView: View {
             RoundedRectangle(cornerRadius: 20)
                 .stroke(.blue.opacity(0.4), lineWidth: 1)
         }
+    }
+
+    /// 「あとでにした2件を戻す」。押すと、あとでにしたものがまた推薦に入る（これも元に戻せる）
+    private var skippedRow: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                viewModel.clearSkips()
+            }
+        } label: {
+            Label("あとでにした\(viewModel.skippedTaskCount)件を戻す", systemImage: "arrow.uturn.backward")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("restoreSkippedButton")
     }
 
     /// 名前の横の丸。押すと完了（「元に戻す」がすぐ出るので、確かめはしない）
@@ -783,38 +769,6 @@ struct ContentView: View {
         }
     }
 
-    /// 完了・削除・あとでの直後に出す、取り消しの知らせ（いちばん新しいものだけ）
-    @ViewBuilder
-    private var bottomBanner: some View {
-        if let deleted = viewModel.lastDeleted {
-            banner(
-                String(localized: "「\(deleted.main.title)」を削除しました"),
-                actionTitle: String(localized: "元に戻す"),
-                identifier: "undoDeleteButton"
-            ) {
-                viewModel.undoDelete()
-            }
-        } else if let completed = viewModel.lastCompletedTask {
-            banner(
-                String(localized: "「\(completed.title)」を完了しました"),
-                actionTitle: String(localized: "元に戻す"),
-                identifier: "undoButton"
-            ) {
-                viewModel.undoLastCompletion()
-            }
-        } else if viewModel.lastSkippedTask != nil {
-            banner(
-                String(localized: "あとでにしました。1時間後にまた出します"),
-                actionTitle: String(localized: "やっぱり今やる"),
-                identifier: "undoSkipButton"
-            ) {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    viewModel.undoSkip()
-                }
-            }
-        }
-    }
-
     /// 入力を読み取った結果。タップすると、その読み取りを外して文字のままタイトルに残す
     @ViewBuilder
     private var quickAddChips: some View {
@@ -918,30 +872,6 @@ struct ContentView: View {
         }
     }
 
-    private func banner(
-        _ message: String,
-        actionTitle: String,
-        identifier: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        HStack(spacing: 12) {
-            Text(message)
-                .font(.subheadline)
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
-
-            Spacer(minLength: 0)
-
-            Button(actionTitle, action: action)
-                .accessibilityIdentifier(identifier)
-                .font(.subheadline)
-                .fontWeight(.semibold)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(.thinMaterial, in: Capsule())
-    }
-
     // MARK: - 遷移先
 
     private var allTasksView: some View {
@@ -963,8 +893,8 @@ struct ContentView: View {
             onDelete: { task in
                 viewModel.deleteTask(task)
             },
-            onUpdate: { updatedTask in
-                viewModel.updateTask(updatedTask)
+            onUpdate: { updatedTask, lowering in
+                viewModel.updateTask(updatedTask, lowering: lowering)
             },
             onWake: { task in
                 viewModel.wakeTask(task)
@@ -974,9 +904,6 @@ struct ContentView: View {
             },
             onTogglePin: { task in
                 viewModel.togglePinnedForToday(task)
-            },
-            onLowerPriority: { taskID in
-                viewModel.lowerPriority(of: taskID)
             },
             onReschedule: { ids, option in
                 viewModel.reschedule(ids, to: option)
@@ -991,20 +918,18 @@ struct ContentView: View {
                 viewModel.deleteRecurring(recurring)
             }
         )
+        .undoBanner()
     }
 
     private func editView(for task: TaskItem) -> some View {
         EditTaskView(
             task: task,
             allTasks: viewModel.allTasks,
-            onSave: { updatedTask in
-                viewModel.updateTask(updatedTask)
+            onSave: { updatedTask, lowering in
+                viewModel.updateTask(updatedTask, lowering: lowering)
             },
             onSplit: { parts in
                 viewModel.splitTask(task, into: parts)
-            },
-            onLowerPriority: { taskID in
-                viewModel.lowerPriority(of: taskID)
             },
             onAddFirstStep: { title, minutes in
                 viewModel.addFirstStep(for: task, title: title, minutes: minutes)
@@ -1013,6 +938,7 @@ struct ContentView: View {
                 viewModel.deleteTask(task)
             }
         )
+        .undoBanner()
     }
 
     // MARK: - ウィジェットから開いたとき

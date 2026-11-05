@@ -294,19 +294,21 @@ final class HomeViewModel: ObservableObject {
 
     /// 選んだタスクを手放す（保管に移す）。推薦や一覧には出なくなる
     func letGo(_ taskIDs: Set<UUID>) {
-        let moving = tasks.filter { taskIDs.contains($0.id) }
-        guard !moving.isEmpty else {
-            return
+        undoable(String(localized: "\(taskIDs.count)件を手放しました")) {
+            let moving = tasks.filter { taskIDs.contains($0.id) }
+            guard !moving.isEmpty else {
+                return
+            }
+
+            tasks.removeAll { taskIDs.contains($0.id) }
+            archivedTasks.append(contentsOf: moving)
+            userDefaults.set(now(), forKey: lastLetGoPromptStorageKey)
+
+            saveArchivedTasks()
+            saveTasks()
+            updateRecommendation()
+            objectWillChange.send()
         }
-
-        tasks.removeAll { taskIDs.contains($0.id) }
-        archivedTasks.append(contentsOf: moving)
-        userDefaults.set(now(), forKey: lastLetGoPromptStorageKey)
-
-        saveArchivedTasks()
-        saveTasks()
-        updateRecommendation()
-        objectWillChange.send()
     }
 
     /// 「手放しますか？」を、また30日あとまで聞かない
@@ -317,23 +319,27 @@ final class HomeViewModel: ObservableObject {
 
     /// 保管から戻す。触れた日時を今にするので、冬眠からも起きる
     func restoreArchived(_ task: TaskItem) {
-        guard let index = archivedTasks.firstIndex(where: { $0.id == task.id }) else {
-            return
+        undoable(String(localized: "「\(task.title)」を戻しました")) {
+            guard let index = archivedTasks.firstIndex(where: { $0.id == task.id }) else {
+                return
+            }
+
+            var restored = archivedTasks.remove(at: index)
+            restored.updatedAt = now()
+            tasks.append(restored)
+
+            saveArchivedTasks()
+            saveTasks()
+            updateRecommendation()
         }
-
-        var restored = archivedTasks.remove(at: index)
-        restored.updatedAt = now()
-        tasks.append(restored)
-
-        saveArchivedTasks()
-        saveTasks()
-        updateRecommendation()
     }
 
     /// 保管したものを完全に消す
     func deleteArchived(_ task: TaskItem) {
-        archivedTasks.removeAll { $0.id == task.id }
-        saveArchivedTasks()
+        undoable(String(localized: "「\(task.title)」を完全に消しました")) {
+            archivedTasks.removeAll { $0.id == task.id }
+            saveArchivedTasks()
+        }
     }
 
     private func saveArchivedTasks() {
@@ -368,35 +374,37 @@ final class HomeViewModel: ObservableObject {
     /// 書き出したファイルを読み込む。今あるものは消さず、まだないもの（IDで判断）だけを足す
     @discardableResult
     func importBackup(_ data: Data) throws -> BackupImportSummary {
-        guard let backup = try? BackupFile.decoder().decode(BackupFile.self, from: data) else {
-            throw BackupError.unreadable
+        return try undoable(String(localized: "読み込んだものを足しました")) {
+            guard let backup = try? BackupFile.decoder().decode(BackupFile.self, from: data) else {
+                throw BackupError.unreadable
+            }
+
+            guard backup.version <= BackupFile.currentVersion else {
+                throw BackupError.newerVersion
+            }
+
+            let existingTaskIDs = Set(tasks.map(\.id)).union(archivedTasks.map(\.id))
+            let newTasks = backup.tasks.filter { !existingTaskIDs.contains($0.id) }
+            let newArchived = backup.archivedTasks.filter { !existingTaskIDs.contains($0.id) }
+
+            let existingRecurringIDs = Set(recurringTasks.map(\.id))
+            let newRecurring = backup.recurringTasks.filter { !existingRecurringIDs.contains($0.id) }
+
+            tasks.append(contentsOf: newTasks)
+            archivedTasks.append(contentsOf: newArchived)
+            recurringTasks.append(contentsOf: newRecurring)
+
+            saveTasks()
+            saveArchivedTasks()
+            saveRecurringTasks()
+            updateRecommendation()
+
+            return BackupImportSummary(
+                addedTasks: newTasks.count,
+                addedRecurringTasks: newRecurring.count,
+                addedArchivedTasks: newArchived.count
+            )
         }
-
-        guard backup.version <= BackupFile.currentVersion else {
-            throw BackupError.newerVersion
-        }
-
-        let existingTaskIDs = Set(tasks.map(\.id)).union(archivedTasks.map(\.id))
-        let newTasks = backup.tasks.filter { !existingTaskIDs.contains($0.id) }
-        let newArchived = backup.archivedTasks.filter { !existingTaskIDs.contains($0.id) }
-
-        let existingRecurringIDs = Set(recurringTasks.map(\.id))
-        let newRecurring = backup.recurringTasks.filter { !existingRecurringIDs.contains($0.id) }
-
-        tasks.append(contentsOf: newTasks)
-        archivedTasks.append(contentsOf: newArchived)
-        recurringTasks.append(contentsOf: newRecurring)
-
-        saveTasks()
-        saveArchivedTasks()
-        saveRecurringTasks()
-        updateRecommendation()
-
-        return BackupImportSummary(
-            addedTasks: newTasks.count,
-            addedRecurringTasks: newRecurring.count,
-            addedArchivedTasks: newArchived.count
-        )
     }
 
     // MARK: - 初回の案内
@@ -418,9 +426,11 @@ final class HomeViewModel: ObservableObject {
         isOnboardingRequested = false
 
         if addExamples {
-            quickAdd(String(localized: "メールを1通返す 10分"))
-            quickAdd(String(localized: "明日までに企画のメモを書く 30分"))
-            quickAdd(String(localized: "部屋の片付け 90分"))
+            undoable(String(localized: "例を3つ入れました")) {
+                quickAdd(String(localized: "メールを1通返す 10分"))
+                quickAdd(String(localized: "明日までに企画のメモを書く 30分"))
+                quickAdd(String(localized: "部屋の片付け 90分"))
+            }
         }
 
         objectWillChange.send()
@@ -491,25 +501,27 @@ final class HomeViewModel: ObservableObject {
     /// - Returns: 足した件数
     @discardableResult
     func importSharedItems() -> Int {
-        guard let sharedDefaults else {
-            return 0
-        }
-
-        var added = 0
-        for item in ShareInbox.drain(from: sharedDefaults) {
-            let before = Set(tasks.map(\.id))
-            guard quickAdd(item.text) else {
-                continue
+        return undoable(String(localized: "共有シートから足しました")) {
+            guard let sharedDefaults else {
+                return 0
             }
-            added += 1
 
-            if let link = item.link,
-               let index = tasks.firstIndex(where: { !before.contains($0.id) }) {
-                tasks[index].link = link
-                saveTasks()
+            var added = 0
+            for item in ShareInbox.drain(from: sharedDefaults) {
+                let before = Set(tasks.map(\.id))
+                guard quickAdd(item.text) else {
+                    continue
+                }
+                added += 1
+
+                if let link = item.link,
+                   let index = tasks.firstIndex(where: { !before.contains($0.id) }) {
+                    tasks[index].link = link
+                    saveTasks()
+                }
             }
+            return added
         }
-        return added
     }
 
     /// システムのウィジェットを描き直す
@@ -769,6 +781,7 @@ final class HomeViewModel: ObservableObject {
         if arguments.contains("-uiTestingSeed") {
             viewModel.quickAdd("Write report 10m")
             viewModel.quickAdd("Read paper 20m")
+            viewModel.dismissUndo()
         }
         return viewModel
     }
@@ -793,93 +806,184 @@ final class HomeViewModel: ObservableObject {
         updateRecommendation()
     }
 
+    // MARK: - 元に戻す
+
+    /// 「元に戻す」で戻す中身。タスク・くり返し・保管・「あとで」・集中をまとめて写す
+    struct UndoState: Equatable {
+        var tasks: [TaskItem]
+        var recurringTasks: [RecurringTask]
+        var archivedTasks: [TaskItem]
+        var skippedUntil: [UUID: Date]
+        var skipCounts: [UUID: Int]
+        var focusSession: FocusSession?
+    }
+
+    /// 直前の操作の「元に戻す」。新しい操作をすると、そちらに置き換わる
+    struct UndoEntry: Identifiable {
+        let id = UUID()
+
+        /// 何をしたか（「「請求書を送る」を完了しました」など）
+        let message: String
+
+        /// 戻すボタンの言葉（ふだんは「元に戻す」）
+        let actionTitle: String
+
+        let state: UndoState
+    }
+
+    @Published private(set) var undoEntry: UndoEntry?
+
+    /// いま操作の途中か（操作のなかで別の操作を呼んでも、「元に戻す」は外側の1つにまとめる）
+    private var undoDepth = 0
+
+    private var undoState: UndoState {
+        UndoState(
+            tasks: tasks,
+            recurringTasks: recurringTasks,
+            archivedTasks: archivedTasks,
+            skippedUntil: skippedUntil,
+            skipCounts: skipCounts,
+            focusSession: focusSession
+        )
+    }
+
+    /// 元に戻せる操作として行う。何も変わらなければ「元に戻す」は出さない
+    ///
+    /// - Parameters:
+    ///   - message: 何をしたか。操作の前に作る（消す前の名前などを使えるように）
+    ///   - action: 戻すボタンの言葉
+    @discardableResult
+    private func undoable<Result>(
+        _ message: @autoclosure () -> String,
+        action: @autoclosure () -> String = String(localized: "元に戻す"),
+        _ body: () throws -> Result
+    ) rethrows -> Result {
+        guard undoDepth == 0 else {
+            return try body()
+        }
+
+        let before = undoState
+        let text = message()
+        let actionTitle = action()
+
+        undoDepth += 1
+        defer {
+            undoDepth -= 1
+            if undoState != before {
+                undoEntry = UndoEntry(message: text, actionTitle: actionTitle, state: before)
+            }
+        }
+        return try body()
+    }
+
+    /// いくつかの操作を、1回の「元に戻す」にまとめて行う（優先度を下げてから保存する、など）
+    func performAsOne(_ message: String, _ body: () -> Void) {
+        undoable(message, body)
+    }
+
+    /// 直前の操作を元に戻す
+    func undo() {
+        guard let entry = undoEntry else {
+            return
+        }
+
+        undoEntry = nil
+        let state = entry.state
+
+        tasks = state.tasks
+        recurringTasks = state.recurringTasks
+        archivedTasks = state.archivedTasks
+        skippedUntil = state.skippedUntil
+        skipCounts = state.skipCounts
+        focusSession = state.focusSession
+
+        // 操作のあとに出したお知らせは、もう当てはまらない
+        lastCompletedTask = nil
+        nextStepCandidate = nil
+        repeatedSkipCandidate = nil
+        isOfferingLightMode = false
+
+        saveRecurringTasks()
+        saveArchivedTasks()
+        saveSkippedUntil()
+        saveSkipCounts()
+        saveFocusSession()
+        saveTasks()
+        updateFocusActivity()
+        updateRecommendation()
+    }
+
+    /// 「元に戻す」の表示を閉じる。`id` を渡したときは、それがまだ出ているときだけ閉じる
+    func dismissUndo(_ id: UUID? = nil) {
+        guard id == nil || undoEntry?.id == id else {
+            return
+        }
+        undoEntry = nil
+    }
+
+    private func pinMessage(for task: TaskItem) -> String {
+        let isPinned = tasks.first { $0.id == task.id }?
+            .isPinnedForToday(at: now(), calendar: calendar, dayStartOffset: dayStartOffset) ?? false
+        return isPinned
+            ? String(localized: "「\(task.title)」の今日やりたいを外しました")
+            : String(localized: "「\(task.title)」を今日やりたいにしました")
+    }
+
+    private func rescheduleMessage(_ taskIDs: Set<UUID>, _ option: RescheduleOption) -> String {
+        if taskIDs.count == 1, let title = tasks.first(where: { taskIDs.contains($0.id) })?.title {
+            return option == .hibernate
+                ? String(localized: "「\(title)」を冬眠させました")
+                : String(localized: "「\(title)」の日付を変えました")
+        }
+        return option == .hibernate
+            ? String(localized: "\(taskIDs.count)件を冬眠させました")
+            : String(localized: "\(taskIDs.count)件の日付を変えました")
+    }
+
+    /// 「あとで」にしているタスクの数（1時間たつと戻る）
+    var skippedTaskCount: Int {
+        let currentDate = now()
+        let taskIDs = Set(tasks.filter { !$0.isCompleted }.map(\.id))
+        return skippedUntil.filter { taskIDs.contains($0.key) && $0.value > currentDate }.count
+    }
+
     // MARK: - 推薦カードからの操作
 
     /// 推薦中のタスクを完了にし、「元に戻す」ができるよう完了前の状態を覚えておく
     func completeRecommendation() {
-        guard let task = recommendation?.task else {
-            return
+        undoable(String(localized: "「\(recommendation?.task.title ?? "")」を完了しました")) {
+            guard let task = recommendation?.task else {
+                return
+            }
+
+            complete(task)
         }
-
-        complete(task)
-    }
-
-    /// 直前に完了にしたタスクを未完了に戻す
-    func undoLastCompletion() {
-        guard let task = lastCompletedTask,
-              let index = tasks.firstIndex(where: { $0.id == task.id }),
-              tasks[index].isCompleted else {
-            lastCompletedTask = nil
-            return
-        }
-
-        tasks[index].isCompleted = false
-        tasks[index].completedAt = nil
-        tasks[index].updatedAt = now()
-        lastCompletedTask = nil
-        nextStepCandidate = nil
-        saveTasks()
-        updateRecommendation()
-    }
-
-    /// 「元に戻す」の表示を閉じる
-    func dismissUndo() {
-        lastCompletedTask = nil
     }
 
     /// 推薦中のタスクを、しばらく推薦から外す。理由は聞かない
     func skipRecommendation() {
-        guard let task = recommendation?.task else {
-            return
-        }
+        undoable(String(localized: "あとでにしました。1時間後にまた出します"), action: String(localized: "やっぱり今やる")) {
+            guard let task = recommendation?.task else {
+                return
+            }
 
-        skippedUntil[task.id] = now().addingTimeInterval(Self.skipDuration)
-        saveSkippedUntil()
-        lastSkippedTask = task
+            skippedUntil[task.id] = now().addingTimeInterval(Self.skipDuration)
+            saveSkippedUntil()
 
-        // 何度も見送られているなら、大きすぎるのかもしれない。一度だけ、小さくするか冬眠させるかを聞く
-        skipCounts[task.id, default: 0] += 1
-        if skipCounts[task.id, default: 0] >= Self.repeatedSkipLimit {
-            skipCounts[task.id] = 0
-            repeatedSkipCandidate = tasks.first { $0.id == task.id }
-            isOfferingLightMode = false
-        } else {
-            // 気が乗らないのかもしれないので、軽いものにするか聞く（責めずに逃げ道を出す）
-            isOfferingLightMode = !prefersLight
-        }
-        saveSkipCounts()
-
-        updateRecommendation()
-    }
-
-    /// 直前に「あとで」にしたタスク。「1時間後にまた出します」と、取り消しを出す
-    @Published private(set) var lastSkippedTask: TaskItem?
-
-    /// 直前の「あとで」を取り消して、そのタスクをまた推薦に戻す
-    func undoSkip() {
-        guard let task = lastSkippedTask else {
-            return
-        }
-
-        lastSkippedTask = nil
-        skippedUntil[task.id] = nil
-        saveSkippedUntil()
-
-        if let count = skipCounts[task.id], count > 0 {
-            skipCounts[task.id] = count - 1
+            // 何度も見送られているなら、大きすぎるのかもしれない。一度だけ、小さくするか冬眠させるかを聞く
+            skipCounts[task.id, default: 0] += 1
+            if skipCounts[task.id, default: 0] >= Self.repeatedSkipLimit {
+                skipCounts[task.id] = 0
+                repeatedSkipCandidate = tasks.first { $0.id == task.id }
+                isOfferingLightMode = false
+            } else {
+                // 気が乗らないのかもしれないので、軽いものにするか聞く（責めずに逃げ道を出す）
+                isOfferingLightMode = !prefersLight
+            }
             saveSkipCounts()
-        }
-        isOfferingLightMode = false
-        if repeatedSkipCandidate?.id == task.id {
-            repeatedSkipCandidate = nil
-        }
 
-        updateRecommendation()
-    }
-
-    /// 「あとで」の知らせを閉じる
-    func dismissSkipFeedback() {
-        lastSkippedTask = nil
+            updateRecommendation()
+        }
     }
 
     // MARK: - 何度も見送られるタスク
@@ -900,8 +1004,10 @@ final class HomeViewModel: ObservableObject {
 
     /// 見送られ続けているタスクを冬眠させる
     func hibernate(_ task: TaskItem) {
-        repeatedSkipCandidate = nil
-        reschedule([task.id], to: .hibernate)
+        undoable(String(localized: "「\(task.title)」を冬眠させました")) {
+            repeatedSkipCandidate = nil
+            reschedule([task.id], to: .hibernate)
+        }
     }
 
     private func resetSkipCount(for taskID: UUID) {
@@ -934,17 +1040,19 @@ final class HomeViewModel: ObservableObject {
 
     /// 「今日やりたい」の印を付け外しする。日付はいじらない
     func togglePinnedForToday(_ task: TaskItem) {
-        guard let index = tasks.firstIndex(where: { $0.id == task.id }) else {
-            return
-        }
+        undoable(pinMessage(for: task)) {
+            guard let index = tasks.firstIndex(where: { $0.id == task.id }) else {
+                return
+            }
 
-        let currentDate = now()
-        tasks[index].pinnedForTodayAt = tasks[index].isPinnedForToday(at: currentDate, calendar: calendar, dayStartOffset: dayStartOffset)
-            ? nil
-            : currentDate
-        tasks[index].updatedAt = currentDate
-        saveTasks()
-        updateRecommendation()
+            let currentDate = now()
+            tasks[index].pinnedForTodayAt = tasks[index].isPinnedForToday(at: currentDate, calendar: calendar, dayStartOffset: dayStartOffset)
+                ? nil
+                : currentDate
+            tasks[index].updatedAt = currentDate
+            saveTasks()
+            updateRecommendation()
+        }
     }
 
     // MARK: - まとめて組み直す
@@ -953,16 +1061,18 @@ final class HomeViewModel: ObservableObject {
 
     /// 選んだタスクの日付をまとめて変える（中身は `TaskRescheduler`）
     func reschedule(_ taskIDs: Set<UUID>, to option: RescheduleOption) {
-        TaskRescheduler.reschedule(
-            taskIDs,
-            to: option,
-            in: &tasks,
-            now: now(),
-            startOfToday: logicalToday,
-            calendar: calendar
-        )
-        saveTasks()
-        updateRecommendation()
+        undoable(rescheduleMessage(taskIDs, option)) {
+            TaskRescheduler.reschedule(
+                taskIDs,
+                to: option,
+                in: &tasks,
+                now: now(),
+                startOfToday: logicalToday,
+                calendar: calendar
+            )
+            saveTasks()
+            updateRecommendation()
+        }
     }
 
     // MARK: - くり返し
@@ -975,70 +1085,78 @@ final class HomeViewModel: ObservableObject {
         isLight: Bool = false,
         recurrence: Recurrence
     ) {
-        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            return
-        }
+        undoable(String(localized: "「\(title.trimmingCharacters(in: .whitespacesAndNewlines))」を足しました。")) {
+            let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else {
+                return
+            }
 
-        recurringTasks.append(
-            RecurringTask(
-                title: trimmed,
-                estimatedMinutes: estimatedMinutes,
-                priority: priority,
-                isLight: isLight,
-                recurrence: recurrence,
-                startDate: calendar.startOfDay(for: now())
+            recurringTasks.append(
+                RecurringTask(
+                    title: trimmed,
+                    estimatedMinutes: estimatedMinutes,
+                    priority: priority,
+                    isLight: isLight,
+                    recurrence: recurrence,
+                    startDate: calendar.startOfDay(for: now())
+                )
             )
-        )
-        saveRecurringTasks()
-        updateRecommendation()
+            saveRecurringTasks()
+            updateRecommendation()
+        }
     }
 
     /// くり返すタスクの中身を変える。すでに出ている今日の分の名前と時間もそろえる
     func updateRecurring(_ updated: RecurringTask) {
-        guard let index = recurringTasks.firstIndex(where: { $0.id == updated.id }) else {
-            return
+        undoable(String(localized: "「\(updated.title)」のくり返しを変えました")) {
+            guard let index = recurringTasks.firstIndex(where: { $0.id == updated.id }) else {
+                return
+            }
+
+            recurringTasks[index] = updated
+
+            for taskIndex in tasks.indices where tasks[taskIndex].recurringID == updated.id && !tasks[taskIndex].isCompleted {
+                tasks[taskIndex].title = updated.title
+                tasks[taskIndex].estimatedMinutes = updated.estimatedMinutes
+                tasks[taskIndex].priority = updated.priority
+                tasks[taskIndex].isLight = updated.isLight
+            }
+
+            saveRecurringTasks()
+            saveTasks()
+            updateRecommendation()
         }
-
-        recurringTasks[index] = updated
-
-        for taskIndex in tasks.indices where tasks[taskIndex].recurringID == updated.id && !tasks[taskIndex].isCompleted {
-            tasks[taskIndex].title = updated.title
-            tasks[taskIndex].estimatedMinutes = updated.estimatedMinutes
-            tasks[taskIndex].priority = updated.priority
-            tasks[taskIndex].isLight = updated.isLight
-        }
-
-        saveRecurringTasks()
-        saveTasks()
-        updateRecommendation()
     }
 
     /// くり返しをやめる。まだ終えていない回も消す（終えた回は「今日やったこと」のために残す）
     func deleteRecurring(_ recurring: RecurringTask) {
-        recurringTasks.removeAll { $0.id == recurring.id }
-        tasks.removeAll { $0.recurringID == recurring.id && !$0.isCompleted }
-        saveRecurringTasks()
-        saveTasks()
-        updateRecommendation()
+        undoable(String(localized: "「\(recurring.title)」のくり返しをやめました")) {
+            recurringTasks.removeAll { $0.id == recurring.id }
+            tasks.removeAll { $0.recurringID == recurring.id && !$0.isCompleted }
+            saveRecurringTasks()
+            saveTasks()
+            updateRecommendation()
+        }
     }
 
     /// くり返しの回を「今回はお休み」にする。その日の分を消し、また出てこないよう覚えておく
     func skipOccurrence(_ task: TaskItem) {
-        guard let recurringID = task.recurringID,
-              let index = recurringTasks.firstIndex(where: { $0.id == recurringID }) else {
-            return
+        undoable(String(localized: "「\(task.title)」を今回はお休みにしました")) {
+            guard let recurringID = task.recurringID,
+                  let index = recurringTasks.firstIndex(where: { $0.id == recurringID }) else {
+                return
+            }
+
+            let day = calendar.startOfDay(for: task.occurrenceDate ?? now())
+            recurringTasks[index].skippedDays.append(day)
+            // 古いお休みの記録は持ち続けない
+            recurringTasks[index].skippedDays.removeAll { $0 < calendar.startOfDay(for: now()).addingTimeInterval(-60 * 60 * 24 * 7) }
+            tasks.removeAll { $0.id == task.id }
+
+            saveRecurringTasks()
+            saveTasks()
+            updateRecommendation()
         }
-
-        let day = calendar.startOfDay(for: task.occurrenceDate ?? now())
-        recurringTasks[index].skippedDays.append(day)
-        // 古いお休みの記録は持ち続けない
-        recurringTasks[index].skippedDays.removeAll { $0 < calendar.startOfDay(for: now()).addingTimeInterval(-60 * 60 * 24 * 7) }
-        tasks.removeAll { $0.id == task.id }
-
-        saveRecurringTasks()
-        saveTasks()
-        updateRecommendation()
     }
 
     /// くり返しのひな形から、今日の回を出す（中身は `RecurrenceScheduler`）
@@ -1071,21 +1189,25 @@ final class HomeViewModel: ObservableObject {
 
     /// 優先度を「中」に戻す
     func lowerPriority(of taskID: UUID) {
-        guard let index = tasks.firstIndex(where: { $0.id == taskID }) else {
-            return
-        }
+        undoable(String(localized: "「\(tasks.first { $0.id == taskID }?.title ?? "")」を「中」にしました")) {
+            guard let index = tasks.firstIndex(where: { $0.id == taskID }) else {
+                return
+            }
 
-        tasks[index].priority = .medium
-        tasks[index].updatedAt = now()
-        saveTasks()
-        updateRecommendation()
+            tasks[index].priority = .medium
+            tasks[index].updatedAt = now()
+            saveTasks()
+            updateRecommendation()
+        }
     }
 
     /// 「今はやらない」をすべて取り消す
     func clearSkips() {
-        skippedUntil.removeAll()
-        saveSkippedUntil()
-        updateRecommendation()
+        undoable(String(localized: "「あとで」を取り消しました")) {
+            skippedUntil.removeAll()
+            saveSkippedUntil()
+            updateRecommendation()
+        }
     }
 
     /// 推薦中のタスクに集中して取りかかる
@@ -1146,23 +1268,25 @@ final class HomeViewModel: ObservableObject {
 
     /// 集中を終える。`completing` が true ならタスクを完了にする
     func finishFocus(completing: Bool) {
-        let startedAt = focusSession?.startedAt
+        undoable(completing ? String(localized: "「\(focusedTask?.title ?? "")」を完了しました") : String(localized: "集中を終えました")) {
+            let startedAt = focusSession?.startedAt
 
-        if completing, let task = focusedTask {
-            // 実際にかかった時間を覚えておく（見積もりの初期値を現実に近づけるため）
-            if let startedAt, let index = tasks.firstIndex(where: { $0.id == task.id }) {
-                let elapsed = now().timeIntervalSince(startedAt)
-                tasks[index].actualMinutes = max(1, Int((elapsed / 60).rounded(.up)))
+            if completing, let task = focusedTask {
+                // 実際にかかった時間を覚えておく（見積もりの初期値を現実に近づけるため）
+                if let startedAt, let index = tasks.firstIndex(where: { $0.id == task.id }) {
+                    let elapsed = now().timeIntervalSince(startedAt)
+                    tasks[index].actualMinutes = max(1, Int((elapsed / 60).rounded(.up)))
+                }
+                complete(task)
             }
-            complete(task)
+
+            focusSession = nil
+            saveFocusSession()
+            updateFocusActivity()
+
+            // 集中していた間に出るはずだった期限の通知は、ここで出す
+            scheduleNotifications(missedSince: startedAt)
         }
-
-        focusSession = nil
-        saveFocusSession()
-        updateFocusActivity()
-
-        // 集中していた間に出るはずだった期限の通知は、ここで出す
-        scheduleNotifications(missedSince: startedAt)
     }
 
     // MARK: - 集中モード（ショートカット）
@@ -1207,29 +1331,31 @@ final class HomeViewModel: ObservableObject {
         _ text: String,
         ignoring: Set<QuickAddParser.Part> = []
     ) -> Bool {
-        guard let parsed = previewQuickAdd(text, ignoring: ignoring) else {
-            return false
-        }
+        return undoable(String(localized: "「\(previewQuickAdd(text, ignoring: ignoring)?.title ?? "")」を足しました。")) {
+            guard let parsed = previewQuickAdd(text, ignoring: ignoring) else {
+                return false
+            }
 
-        if let recurrence = parsed.recurrence {
-            addRecurring(
+            if let recurrence = parsed.recurrence {
+                addRecurring(
+                    title: parsed.title,
+                    estimatedMinutes: parsed.estimatedMinutes,
+                    isLight: parsed.isLight,
+                    recurrence: recurrence
+                )
+                return true
+            }
+
+            addTask(
                 title: parsed.title,
                 estimatedMinutes: parsed.estimatedMinutes,
-                isLight: parsed.isLight,
-                recurrence: recurrence
+                priority: .medium,
+                scheduledDate: parsed.scheduledDate,
+                deadline: parsed.deadline,
+                isLight: parsed.isLight
             )
             return true
         }
-
-        addTask(
-            title: parsed.title,
-            estimatedMinutes: parsed.estimatedMinutes,
-            priority: .medium,
-            scheduledDate: parsed.scheduledDate,
-            deadline: parsed.deadline,
-            isLight: parsed.isLight
-        )
-        return true
     }
 
     // MARK: - 見積もりと実際
@@ -1391,40 +1517,42 @@ final class HomeViewModel: ObservableObject {
     ///
     /// 全部を分けなくても、一歩だけ決めれば推薦に出るようにする。ホームには、まだ済んでいない最初の一歩だけが出る。
     func addStep(to parent: TaskItem, title stepTitle: String, minutes: Int) {
-        let trimmed = stepTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        undoable(String(localized: "「\(stepTitle.trimmingCharacters(in: .whitespacesAndNewlines))」を足しました。")) {
+            let trimmed = stepTitle.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        guard !trimmed.isEmpty,
-              let parentIndex = tasks.firstIndex(where: { $0.id == parent.id }) else {
-            return
+            guard !trimmed.isEmpty,
+                  let parentIndex = tasks.firstIndex(where: { $0.id == parent.id }) else {
+                return
+            }
+
+            let currentDate = now()
+            let groupID = tasks[parentIndex].splitGroupID ?? tasks[parentIndex].id
+
+            let step = TaskItem(
+                title: trimmed,
+                estimatedMinutes: min(max(minutes, 5), 480),
+                priority: tasks[parentIndex].priority,
+                deadline: tasks[parentIndex].deadline,
+                updatedAt: currentDate,
+                splitGroupID: groupID,
+                parentTaskID: parent.id
+            )
+
+            tasks[parentIndex].splitGroupID = groupID
+            tasks[parentIndex].updatedAt = currentDate
+            resetSkipCount(for: parent.id)
+            if repeatedSkipCandidate?.id == parent.id {
+                repeatedSkipCandidate = nil
+            }
+            // 一歩は元のタスクの直前に並べる（決めた順のまま、元のタスクより前になる）
+            tasks.insert(step, at: parentIndex)
+
+            skippedUntil[step.id] = nil
+            nextStepCandidate = nil
+            rebuildStepChain(for: parent.id)
+            saveTasks()
+            updateRecommendation()
         }
-
-        let currentDate = now()
-        let groupID = tasks[parentIndex].splitGroupID ?? tasks[parentIndex].id
-
-        let step = TaskItem(
-            title: trimmed,
-            estimatedMinutes: min(max(minutes, 5), 480),
-            priority: tasks[parentIndex].priority,
-            deadline: tasks[parentIndex].deadline,
-            updatedAt: currentDate,
-            splitGroupID: groupID,
-            parentTaskID: parent.id
-        )
-
-        tasks[parentIndex].splitGroupID = groupID
-        tasks[parentIndex].updatedAt = currentDate
-        resetSkipCount(for: parent.id)
-        if repeatedSkipCandidate?.id == parent.id {
-            repeatedSkipCandidate = nil
-        }
-        // 一歩は元のタスクの直前に並べる（決めた順のまま、元のタスクより前になる）
-        tasks.insert(step, at: parentIndex)
-
-        skippedUntil[step.id] = nil
-        nextStepCandidate = nil
-        rebuildStepChain(for: parent.id)
-        saveTasks()
-        updateRecommendation()
     }
 
     /// 以前の呼び方。最初の一歩を足す
@@ -1434,21 +1562,25 @@ final class HomeViewModel: ObservableObject {
 
     /// 一歩を取り消す
     func deleteStep(_ step: TaskItem) {
-        guard let parentID = step.parentTaskID else {
-            return
-        }
+        undoable(String(localized: "「\(step.title)」を削除しました")) {
+            guard let parentID = step.parentTaskID else {
+                return
+            }
 
-        tasks.removeAll { $0.id == step.id }
-        rebuildStepChain(for: parentID)
-        saveTasks()
-        updateRecommendation()
+            tasks.removeAll { $0.id == step.id }
+            rebuildStepChain(for: parentID)
+            saveTasks()
+            updateRecommendation()
+        }
     }
 
     /// まだ済んでいない一歩の順番を入れ替える
     func moveOpenSteps(of parentID: UUID, fromOffsets source: IndexSet, toOffset destination: Int) {
-        StepChain.moveOpenSteps(of: parentID, fromOffsets: source, toOffset: destination, in: &tasks)
-        saveTasks()
-        updateRecommendation()
+        undoable(String(localized: "一歩の順番を変えました")) {
+            StepChain.moveOpenSteps(of: parentID, fromOffsets: source, toOffset: destination, in: &tasks)
+            saveTasks()
+            updateRecommendation()
+        }
     }
 
     /// 一歩を、決めた順につなぎ直す（中身は `StepChain`）
@@ -1475,156 +1607,120 @@ final class HomeViewModel: ObservableObject {
         isLight: Bool = false,
         link: URL? = nil
     ) {
-        let task = TaskItem(
-            title: title,
-            estimatedMinutes: estimatedMinutes,
-            priority: priority,
-            scheduledDate: scheduledDate,
-            deadline: deadline,
-            updatedAt: now(),
-            isLight: isLight,
-            link: link
-        )
+        undoable(String(localized: "「\(title)」を足しました。")) {
+            let task = TaskItem(
+                title: title,
+                estimatedMinutes: estimatedMinutes,
+                priority: priority,
+                scheduledDate: scheduledDate,
+                deadline: deadline,
+                updatedAt: now(),
+                isLight: isLight,
+                link: link
+            )
 
-        tasks.append(task)
-        saveTasks()
-        updateRecommendation()
+            tasks.append(task)
+            saveTasks()
+            updateRecommendation()
+        }
     }
     
     /// タスクの完了状態を切り替える
     func toggleCompletion(for task: TaskItem) {
-        guard let index = tasks.firstIndex(where: { $0.id == task.id }) else {
-            return
-        }
+        undoable(task.isCompleted ? String(localized: "「\(task.title)」を未完了に戻しました") : String(localized: "「\(task.title)」を完了しました")) {
+            guard let index = tasks.firstIndex(where: { $0.id == task.id }) else {
+                return
+            }
 
-        tasks[index].isCompleted.toggle()
-        tasks[index].completedAt = tasks[index].isCompleted ? now() : nil
-        tasks[index].updatedAt = now()
-        saveTasks()
-        updateRecommendation()
+            tasks[index].isCompleted.toggle()
+            tasks[index].completedAt = tasks[index].isCompleted ? now() : nil
+            tasks[index].updatedAt = now()
+            saveTasks()
+            updateRecommendation()
+        }
     }
 
     /// 冬眠中のタスクを起こす。触れた日時を今にして、推薦と今日・明日の欄に戻す
     func wakeTask(_ task: TaskItem) {
-        guard let index = tasks.firstIndex(where: { $0.id == task.id }) else {
-            return
-        }
+        undoable(String(localized: "「\(task.title)」を起こしました")) {
+            guard let index = tasks.firstIndex(where: { $0.id == task.id }) else {
+                return
+            }
 
-        tasks[index].updatedAt = now()
-        saveTasks()
-        updateRecommendation()
+            tasks[index].updatedAt = now()
+            saveTasks()
+            updateRecommendation()
+        }
     }
 
     /// 大きいタスクを、順番につながった小さいタスクに置き換える
     func splitTask(_ task: TaskItem, into parts: [TaskSplitPart]) {
-        let splitTasks = TaskSplitter.split(
-            task,
-            into: parts,
-            in: tasks,
-            now: now()
-        )
+        undoable(String(localized: "「\(task.title)」を\(parts.count)つに分けました")) {
+            let splitTasks = TaskSplitter.split(
+                task,
+                into: parts,
+                in: tasks,
+                now: now()
+            )
 
-        guard splitTasks != tasks else {
-            return
+            guard splitTasks != tasks else {
+                return
+            }
+
+            tasks = splitTasks
+            saveTasks()
+            updateRecommendation()
         }
-
-        tasks = splitTasks
-        saveTasks()
-        updateRecommendation()
     }
-
-    /// 直前に削除したもの。「元に戻す」で戻せるよう、少しのあいだだけ覚えておく
-    struct DeletedTasks {
-        /// 削除したタスク（一歩も含む）と、一覧のなかでの元の位置。一歩の順番を崩さずに戻すため
-        let tasks: [(index: Int, task: TaskItem)]
-
-        /// 削除したタスクを前提にしていたタスク
-        let dependentIDs: [UUID]
-
-        /// 表示に使う、消したタスク
-        let main: TaskItem
-    }
-
-    @Published private(set) var lastDeleted: DeletedTasks?
 
     /// 指定したタスクを削除する
     func deleteTask(_ task: TaskItem) {
-        let removed = tasks.enumerated()
-            .filter { $0.element.id == task.id || $0.element.parentTaskID == task.id }
-            .map { (index: $0.offset, task: $0.element) }
-        guard let main = removed.first(where: { $0.task.id == task.id })?.task else {
-            return
-        }
+        undoable(String(localized: "「\(task.title)」を削除しました")) {
+            guard tasks.contains(where: { $0.id == task.id }) else {
+                return
+            }
 
-        tasks.removeAll { $0.id == task.id || $0.parentTaskID == task.id }
+            tasks.removeAll { $0.id == task.id || $0.parentTaskID == task.id }
 
-        // 削除したタスクを前提にしていたタスクが、推薦されないまま残らないようにする
-        var dependentIDs: [UUID] = []
-        for index in tasks.indices where tasks[index].prerequisiteIDs.contains(task.id) {
-            tasks[index].prerequisiteIDs.removeAll { $0 == task.id }
-            dependentIDs.append(tasks[index].id)
-        }
-        lastDeleted = DeletedTasks(tasks: removed, dependentIDs: dependentIDs, main: main)
+            // 削除したタスクを前提にしていたタスクが、推薦されないまま残らないようにする
+            for index in tasks.indices {
+                tasks[index].prerequisiteIDs.removeAll { $0 == task.id }
+            }
 
-        if lastCompletedTask?.id == task.id {
-            lastCompletedTask = nil
-        }
-        if lastSkippedTask?.id == task.id {
-            lastSkippedTask = nil
-        }
+            // 一歩を消したなら、残りの一歩をつなぎ直す
+            if let parentID = task.parentTaskID {
+                rebuildStepChain(for: parentID)
+            }
 
-        // 一歩を消したなら、残りの一歩をつなぎ直す
-        if let parentID = task.parentTaskID {
-            rebuildStepChain(for: parentID)
+            saveTasks()
+            updateRecommendation()
         }
-
-        saveTasks()
-        updateRecommendation()
     }
     
-    /// 直前の削除を取り消す
-    func undoDelete() {
-        guard let deleted = lastDeleted else {
-            return
-        }
-
-        lastDeleted = nil
-        let existingIDs = Set(tasks.map(\.id))
-        for entry in deleted.tasks where !existingIDs.contains(entry.task.id) {
-            tasks.insert(entry.task, at: min(entry.index, tasks.count))
-        }
-
-        for index in tasks.indices where deleted.dependentIDs.contains(tasks[index].id) {
-            if !tasks[index].prerequisiteIDs.contains(deleted.main.id) {
-                tasks[index].prerequisiteIDs.append(deleted.main.id)
+    /// 編集を保存する。優先度「高」を付けるために別のタスクを「中」に戻すなら、それも一緒に（1回の「元に戻す」で戻る）
+    func updateTask(_ updatedTask: TaskItem, lowering: UUID?) {
+        undoable(String(localized: "「\(updatedTask.title)」を保存しました")) {
+            if let lowering {
+                lowerPriority(of: lowering)
             }
+            updateTask(updatedTask)
         }
-
-        if let parentID = deleted.main.parentTaskID {
-            rebuildStepChain(for: parentID)
-        }
-
-        saveTasks()
-        updateRecommendation()
-    }
-
-    /// 削除の「元に戻す」を閉じる
-    func dismissDeleteUndo() {
-        lastDeleted = nil
     }
 
     /// 既存タスクの内容を更新する
     func updateTask(_ updatedTask: TaskItem) {
-        guard let index = tasks.firstIndex(
-            where: { $0.id == updatedTask.id }
-        ) else {
-            return
-        }
+        undoable(String(localized: "「\(updatedTask.title)」を保存しました")) {
+            guard let index = tasks.firstIndex(
+                where: { $0.id == updatedTask.id }
+            ) else {
+                return
+            }
 
-        tasks[index] = updatedTask
-        tasks[index].updatedAt = now()
-        saveTasks()
-        updateRecommendation()
+            tasks[index] = updatedTask
+            tasks[index].updatedAt = now()
+            saveTasks()
+            updateRecommendation()
+        }
     }
     
     /// 現在のタスク一覧を保存する

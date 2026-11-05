@@ -2,8 +2,6 @@ import SwiftUI
 
 struct AllTasksView: View {
 
-    @State private var taskToDelete: TaskItem?
-    @State private var showingDeleteConfirmation = false
     @State private var isSelecting = false
     @State private var selection: Set<UUID> = []
 
@@ -20,11 +18,11 @@ struct AllTasksView: View {
     var stepNotes: [UUID: String] = [:]
     let onToggleCompletion: (TaskItem) -> Void
     let onDelete: (TaskItem) -> Void
-    let onUpdate: (TaskItem) -> Void
+    /// 2つ目は、優先度「高」を付けるために「中」に戻すタスク（なければ nil）
+    let onUpdate: (TaskItem, UUID?) -> Void
     var onWake: (TaskItem) -> Void = { _ in }
     var onSplit: (TaskItem, [TaskSplitPart]) -> Void = { _, _ in }
     var onTogglePin: (TaskItem) -> Void = { _ in }
-    var onLowerPriority: (UUID) -> Void = { _ in }
     var onReschedule: (Set<UUID>, HomeViewModel.RescheduleOption) -> Void = { _, _ in }
     var onAddFirstStep: (TaskItem, String, Int) -> Void = { _, _, _ in }
     var onUpdateRecurring: (RecurringTask) -> Void = { _ in }
@@ -61,13 +59,12 @@ struct AllTasksView: View {
                 EditTaskView(
                     task: task,
                     allTasks: tasks,
-                    onSave: { updatedTask in
-                        onUpdate(updatedTask)
+                    onSave: { updatedTask, lowering in
+                        onUpdate(updatedTask, lowering)
                     },
                     onSplit: { parts in
                         onSplit(task, parts)
                     },
-                    onLowerPriority: onLowerPriority,
                     onAddFirstStep: { title, minutes in
                         onAddFirstStep(task, title, minutes)
                     },
@@ -75,6 +72,7 @@ struct AllTasksView: View {
                         onDelete(task)
                     }
                 )
+                .undoBanner()
             } label: {
                 TaskRowView(
                     task: task,
@@ -106,9 +104,9 @@ struct AllTasksView: View {
                 }
             }
             .swipeActions(edge: .trailing) {
+                // すぐ消して、画面の下の「元に戻す」で戻せるようにする（確かめの画面は出さない）
                 Button(role: .destructive) {
-                    taskToDelete = task
-                    showingDeleteConfirmation = true
+                    onDelete(task)
                 } label: {
                     Label("削除", systemImage: "trash")
                 }
@@ -123,6 +121,7 @@ struct AllTasksView: View {
                             emptyMessage: String(localized: "ありません"),
                             tasks: hiddenCompletedTasks
                         )
+                        .undoBanner()
                     } label: {
                         LabeledContent(
                             "完了して\(HomeViewModel.completedHideDays)日たったもの",
@@ -142,6 +141,7 @@ struct AllTasksView: View {
                         onUpdate: onUpdateRecurring,
                         onDelete: onDeleteRecurring
                     )
+                    .undoBanner()
                 } label: {
                     Label("くり返し", systemImage: "repeat")
                 }
@@ -171,22 +171,6 @@ struct AllTasksView: View {
                 }
             }
         }
-        .alert(
-            "このタスクを削除しますか？",
-            isPresented: $showingDeleteConfirmation,
-            presenting: taskToDelete
-        ) { task in
-            Button("削除", role: .destructive) {
-                onDelete(task)
-                taskToDelete = nil
-            }
-
-            Button("キャンセル", role: .cancel) {
-                taskToDelete = nil
-            }
-        } message: { task in
-            Text("「\(task.title)」は元に戻せません。")
-        }
     }
 }
 
@@ -202,7 +186,7 @@ struct AllTasksView: View {
             ],
             onToggleCompletion: { _ in },
             onDelete: { _ in },
-            onUpdate: { _ in }
+            onUpdate: { _, _ in }
         )
     }
 }

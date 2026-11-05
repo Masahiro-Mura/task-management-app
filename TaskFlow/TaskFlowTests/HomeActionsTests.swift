@@ -49,7 +49,7 @@ struct HomeActionsTests {
         #expect(viewModel.lastCompletedTask?.title == "A")
         #expect(viewModel.tasks.first { $0.title == "A" }?.isCompleted == true)
 
-        viewModel.undoLastCompletion()
+        viewModel.undo()
 
         #expect(viewModel.recommendation?.task.title == "A")
         #expect(viewModel.lastCompletedTask == nil)
@@ -62,7 +62,7 @@ struct HomeActionsTests {
 
         viewModel.completeRecommendation()
         viewModel.dismissUndo()
-        viewModel.undoLastCompletion()
+        viewModel.undo()
 
         #expect(viewModel.tasks.first { $0.title == "A" }?.isCompleted == true)
     }

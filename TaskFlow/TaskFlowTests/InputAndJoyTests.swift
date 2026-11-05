@@ -80,7 +80,7 @@ struct InputAndJoyTests {
         #expect(viewModel.completedToday.map(\.title) == ["A"])
         #expect(viewModel.tasks.first { $0.title == "A" }?.completedAt == now)
 
-        viewModel.undoLastCompletion()
+        viewModel.undo()
 
         #expect(viewModel.completedToday.isEmpty)
         #expect(viewModel.tasks.first { $0.title == "A" }?.completedAt == nil)

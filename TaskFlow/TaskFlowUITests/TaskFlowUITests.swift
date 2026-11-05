@@ -82,7 +82,7 @@ final class TaskFlowUITests: XCTestCase {
         XCTAssertTrue(delete.waitForExistence(timeout: 3))
         delete.tap()
 
-        let undo = app.buttons["undoDeleteButton"]
+        let undo = app.buttons["undoButton"]
         XCTAssertTrue(undo.waitForExistence(timeout: 3))
         XCTAssertEqual(app.staticTexts["recommendationTitle"].label, "Read paper")
         undo.tap()
@@ -92,5 +92,25 @@ final class TaskFlowUITests: XCTestCase {
             evaluatedWith: app.staticTexts["recommendationTitle"]
         )
         wait(for: [restored], timeout: 5)
+    }
+
+    @MainActor
+    func testDeletingFromAllTasksCanBeUndoneThere() throws {
+        let app = launch(seeded: true)
+        XCTAssertTrue(app.staticTexts["recommendationTitle"].waitForExistence(timeout: 5))
+
+        app.buttons["allTasksButton"].tap()
+        let row = app.staticTexts["Read paper"]
+        XCTAssertTrue(row.waitForExistence(timeout: 3))
+        row.swipeLeft()
+        // 英語で起動しているので、スワイプのボタンは「Delete」
+        app.buttons["Delete"].firstMatch.tap()
+
+        let undo = app.buttons["undoButton"]
+        XCTAssertTrue(undo.waitForExistence(timeout: 3))
+        XCTAssertFalse(row.exists)
+        undo.tap()
+
+        XCTAssertTrue(app.staticTexts["Read paper"].waitForExistence(timeout: 3))
     }
 }

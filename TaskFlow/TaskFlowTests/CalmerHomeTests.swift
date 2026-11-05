@@ -151,11 +151,11 @@ struct CalmerHomeTests {
         #expect(viewModel.recommendation?.task.title == "A")
 
         viewModel.skipRecommendation()
-        #expect(viewModel.lastSkippedTask?.title == "A")
+        #expect(viewModel.undoEntry?.actionTitle == "やっぱり今やる")
         #expect(viewModel.recommendation?.task.title == "B")
 
-        viewModel.undoSkip()
-        #expect(viewModel.lastSkippedTask == nil)
+        viewModel.undo()
+        #expect(viewModel.undoEntry == nil)
         #expect(viewModel.recommendation?.task.title == "A")
         #expect(!viewModel.isOfferingLightMode)
     }
@@ -173,10 +173,10 @@ struct CalmerHomeTests {
 
         viewModel.deleteTask(parent)
         #expect(viewModel.tasks.isEmpty)
-        #expect(viewModel.lastDeleted?.main.title == "まとめる")
+        #expect(viewModel.undoEntry?.message == "「まとめる」を削除しました")
 
-        viewModel.undoDelete()
-        #expect(viewModel.lastDeleted == nil)
+        viewModel.undo()
+        #expect(viewModel.undoEntry == nil)
         #expect(viewModel.tasks.map(\.id) == before.map(\.id))
         #expect(viewModel.tasks.map(\.prerequisiteIDs) == before.map(\.prerequisiteIDs))
     }
@@ -194,7 +194,7 @@ struct CalmerHomeTests {
         viewModel.deleteTask(first)
         #expect(viewModel.tasks.first { $0.title == "後" }?.prerequisiteIDs.isEmpty == true)
 
-        viewModel.undoDelete()
+        viewModel.undo()
         #expect(viewModel.tasks.first { $0.title == "後" }?.prerequisiteIDs == [first.id])
     }
 }
