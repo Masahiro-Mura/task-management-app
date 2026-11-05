@@ -130,6 +130,103 @@ struct PolishRoundTests {
         #expect(makeViewModel(clock: clock).focusSession == nil)
     }
 
+    // MARK: - 何度も見送られるタスク
+
+    @Test
+    func thirdSkipOffersToMakeItSmallerOnce() throws {
+        let clock = PolishClock(now: date(2026, 11, 5, 10))
+        let viewModel = makeViewModel(clock: clock)
+        viewModel.quickAdd("企画書を書く 30分")
+        let task = try #require(viewModel.tasks.first)
+
+        for round in 1...3 {
+            viewModel.skipRecommendation()
+            #expect((viewModel.repeatedSkipCandidate != nil) == (round == 3))
+            // 1時間たって、また推薦に戻ってくる
+            clock.now = clock.now.addingTimeInterval(61 * 60)
+            viewModel.updateRecommendation()
+        }
+
+        #expect(viewModel.repeatedSkipCandidate?.id == task.id)
+        #expect(!viewModel.isOfferingLightMode)
+
+        viewModel.dismissRepeatedSkipOffer()
+        viewModel.skipRecommendation()
+        // 聞いたあとは数え直すので、すぐにはまた聞かない
+        #expect(viewModel.repeatedSkipCandidate == nil)
+    }
+
+    @Test
+    func startingOrAddingAStepResetsTheCount() throws {
+        let clock = PolishClock(now: date(2026, 11, 5, 10))
+        let viewModel = makeViewModel(clock: clock)
+        viewModel.quickAdd("企画書を書く 30分")
+        let task = try #require(viewModel.tasks.first)
+
+        viewModel.skipRecommendation()
+        viewModel.skipRecommendation()
+        viewModel.clearSkips()
+        viewModel.startFocus(on: task.id)
+        viewModel.finishFocus(completing: false)
+        viewModel.skipRecommendation()
+
+        #expect(viewModel.repeatedSkipCandidate == nil)
+    }
+
+    @Test
+    func hibernatingFromTheOfferPutsTheTaskToSleep() throws {
+        let clock = PolishClock(now: date(2026, 11, 5, 10))
+        let viewModel = makeViewModel(clock: clock)
+        viewModel.quickAdd("企画書を書く 30分")
+        let task = try #require(viewModel.tasks.first)
+
+        viewModel.hibernate(task)
+
+        #expect(viewModel.dormantTaskIDs == [task.id])
+        #expect(viewModel.repeatedSkipCandidate == nil)
+    }
+
+    // MARK: - 見積もりと実際
+
+    @Test
+    func actualTimeIsRecordedAndShapesTheQuickAddDefault() throws {
+        let clock = PolishClock(now: date(2026, 11, 5, 9))
+        let viewModel = makeViewModel(clock: clock)
+        #expect(viewModel.estimateRatio == nil)
+        #expect(viewModel.quickAddDefaultMinutes == 30)
+
+        // 20分の見積もりで、実際は30分かかった（1.5倍）を5回
+        for index in 0..<5 {
+            viewModel.quickAdd("作業\(index) 20分")
+            let task = try #require(viewModel.tasks.last)
+            viewModel.startFocus(on: task.id)
+            clock.now = clock.now.addingTimeInterval(30 * 60)
+            viewModel.finishFocus(completing: true)
+        }
+
+        #expect(viewModel.tasks.allSatisfy { $0.actualMinutes == 30 })
+        #expect(viewModel.estimateRatio == 1.5)
+        #expect(viewModel.quickAddDefaultMinutes == 45)
+
+        // 時間を書いたときは、そのまま
+        viewModel.quickAdd("メール 10分")
+        #expect(viewModel.tasks.last?.estimatedMinutes == 10)
+        viewModel.quickAdd("掃除")
+        #expect(viewModel.tasks.last?.estimatedMinutes == 45)
+    }
+
+    // MARK: - UIテスト用の起動
+
+    @Test
+    func uiTestingLaunchUsesAnEmptySeparateStore() {
+        let plain = HomeViewModel.makeForApp(arguments: ["-uiTesting"])
+        #expect(plain.tasks.isEmpty)
+        #expect(!plain.needsOnboarding)
+
+        let seeded = HomeViewModel.makeForApp(arguments: ["-uiTesting", "-uiTestingSeed"])
+        #expect(seeded.tasks.map(\.title) == ["Write report", "Read paper"])
+    }
+
     // MARK: - 古い完了の整理
 
     @Test

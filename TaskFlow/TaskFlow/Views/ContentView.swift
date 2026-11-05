@@ -5,7 +5,7 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
 
-    @StateObject private var viewModel = HomeViewModel()
+    @StateObject private var viewModel = HomeViewModel.makeForApp()
     @State private var isShowingAddTask = false
     @State private var isTodayExpanded = false
     @State private var editingTaskID: UUID?
@@ -45,7 +45,10 @@ struct ContentView: View {
                     } else {
                         availableMinutesPicker
 
-                        if viewModel.isOfferingLightMode {
+                        if let candidate = viewModel.repeatedSkipCandidate {
+                            repeatedSkipOffer(for: candidate)
+                                .transition(.opacity)
+                        } else if viewModel.isOfferingLightMode {
                             lightModeOffer
                                 .transition(.opacity)
                         }
@@ -205,6 +208,9 @@ struct ContentView: View {
                         }
                     )
                 }
+            }
+            .onAppear {
+                HomeViewModel.current = viewModel
             }
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .active {
@@ -370,6 +376,7 @@ struct ContentView: View {
                 Text(task.title)
                     .font(.title2)
                     .fontWeight(.semibold)
+                    .accessibilityIdentifier("recommendationTitle")
 
                 Text(details(for: task))
                     .font(.subheadline)
@@ -379,17 +386,27 @@ struct ContentView: View {
             Text(recommendation.reason)
                 .font(.body)
 
-            Button {
-                beginFocus()
-            } label: {
-                Label("始める", systemImage: "play.fill")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .keyboardShortcut(.return, modifiers: .command)
+            // 取りかかる2つは並べ、ほかの操作は控えめにまとめる（「開いて1つ分かる」を崩さないため）
+            HStack(spacing: 10) {
+                Button {
+                    beginFocus()
+                } label: {
+                    Label("始める", systemImage: "play.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.return, modifiers: .command)
 
-            HStack(spacing: 12) {
+                Button {
+                    beginFocus(on: task.id, trialMinutes: HomeViewModel.trialFocusMinutes)
+                } label: {
+                    Label("\(HomeViewModel.trialFocusMinutes)分だけ", systemImage: "timer")
+                }
+                .buttonStyle(.bordered)
+            }
+            .controlSize(.large)
+
+            HStack(spacing: 10) {
                 Button {
                     viewModel.completeRecommendation()
                 } label: {
@@ -397,31 +414,41 @@ struct ContentView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .keyboardShortcut("d", modifiers: .command)
+                .accessibilityIdentifier("completeButton")
 
                 Button {
                     viewModel.skipRecommendation()
                 } label: {
                     Text("今はやらない")
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                         .frame(maxWidth: .infinity)
                 }
                 .keyboardShortcut("l", modifiers: .command)
+
+                Menu {
+                    Button {
+                        firstStepTask = task
+                    } label: {
+                        Label(stepsButtonTitle(for: task), systemImage: "shoeprints.fill")
+                    }
+
+                    // くり返しの回は、その回だけ休める
+                    if task.recurringID != nil {
+                        Button {
+                            viewModel.skipOccurrence(task)
+                        } label: {
+                            Label("今回はお休み", systemImage: "moon.zzz")
+                        }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .frame(minWidth: 24, minHeight: 20)
+                }
+                .accessibilityLabel("ほかの操作")
             }
             .buttonStyle(.bordered)
             .controlSize(.large)
-
-            // 全部やらなくても手をつけられる入り口は、どのタスクにも添える
-            startShortcuts(for: task)
-
-            // くり返しの回は、その回だけ休める
-            if task.recurringID != nil {
-                Button {
-                    viewModel.skipOccurrence(task)
-                } label: {
-                    Label("今回はお休み", systemImage: "moon.zzz")
-                }
-                .font(.subheadline)
-                .buttonStyle(.borderless)
-            }
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -694,6 +721,7 @@ struct ContentView: View {
             TextField("タスクを追加（例：請求書を送る 15分）", text: $quickAddText)
                 .submitLabel(.done)
                 .onSubmit(submitQuickAdd)
+                .accessibilityIdentifier("quickAddField")
 
             if !quickAddText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Button("追加", action: submitQuickAdd)
@@ -723,6 +751,7 @@ struct ContentView: View {
             Button("元に戻す") {
                 viewModel.undoLastCompletion()
             }
+            .accessibilityIdentifier("undoButton")
             .font(.subheadline)
             .fontWeight(.semibold)
         }
@@ -889,6 +918,47 @@ struct ContentView: View {
         }
         .padding(12)
         .background(.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    // MARK: - 何度も見送られるタスク
+
+    /// 責めずに、小さくするか、いったん眠らせるかを選べるようにする
+    private func repeatedSkipOffer(for task: TaskItem) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "shoeprints.fill")
+                    .foregroundStyle(.orange)
+
+                Text("「\(task.title)」は、今は手が出にくいのかもしれません。小さくしてみますか？")
+                    .font(.subheadline)
+
+                Spacer(minLength: 0)
+
+                Button {
+                    viewModel.dismissRepeatedSkipOffer()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityLabel("閉じる")
+            }
+
+            HStack(spacing: 10) {
+                Button(stepsButtonTitle(for: task)) {
+                    viewModel.dismissRepeatedSkipOffer()
+                    firstStepTask = task
+                }
+
+                Button("冬眠させる") {
+                    viewModel.hibernate(task)
+                }
+            }
+            .buttonStyle(.bordered)
+            .font(.subheadline)
+        }
+        .padding(12)
+        .background(.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
     }
 
     // MARK: - 手放す

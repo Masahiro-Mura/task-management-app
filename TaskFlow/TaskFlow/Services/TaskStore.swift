@@ -11,6 +11,7 @@ struct TaskStore {
         static let recurring = "taskFlow.recurring"
         static let skippedUntil = "taskFlow.skippedUntil"
         static let focusSession = "taskFlow.focusSession"
+        static let skipCounts = "taskFlow.skipCounts"
         static let availableMinutes = "taskFlow.availableMinutes"
 
         /// 読み込めなかった保存データの退避先キーの接頭辞

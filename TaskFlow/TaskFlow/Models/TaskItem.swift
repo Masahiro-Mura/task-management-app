@@ -56,6 +56,9 @@ struct TaskItem: Identifiable, Equatable, Codable {
     /// 「一歩」なら、それが属する元のタスクのID。一歩のタイトルには元のタスク名を入れない
     var parentTaskID: UUID?
 
+    /// 集中画面で計った、実際にかかった時間（分）。見積もりの初期値を現実に近づけるのに使う
+    var actualMinutes: Int?
+
     init(
         id: UUID = UUID(),
         title: String,
@@ -72,7 +75,8 @@ struct TaskItem: Identifiable, Equatable, Codable {
         isLight: Bool = false,
         recurringID: UUID? = nil,
         occurrenceDate: Date? = nil,
-        parentTaskID: UUID? = nil
+        parentTaskID: UUID? = nil,
+        actualMinutes: Int? = nil
     ) {
         self.id = id
         self.title = title
@@ -90,6 +94,7 @@ struct TaskItem: Identifiable, Equatable, Codable {
         self.recurringID = recurringID
         self.occurrenceDate = occurrenceDate
         self.parentTaskID = parentTaskID
+        self.actualMinutes = actualMinutes
     }
 
     init(from decoder: Decoder) throws {
@@ -159,6 +164,11 @@ struct TaskItem: Identifiable, Equatable, Codable {
         parentTaskID = try container.decodeIfPresent(
             UUID.self,
             forKey: .parentTaskID
+        )
+
+        actualMinutes = try container.decodeIfPresent(
+            Int.self,
+            forKey: .actualMinutes
         )
     }
 }

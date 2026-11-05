@@ -1,43 +1,59 @@
-//
-//  TaskFlowUITests.swift
-//  TaskFlowUITests
-//
-//  Created by Masahiro Mura on 2026/07/12.
-//
-
 import XCTest
 
+/// 主な流れを、実際の画面で確かめる
+///
+/// アプリは `-uiTesting` で起動し、毎回空の専用の保存先を使う（ふだんのデータには触れない）。
 final class TaskFlowUITests: XCTestCase {
 
     override func setUpWithError() throws {
-        // Put setup code here. This method is called before the invocation of each test method in the class.
-
-        // In UI tests it is usually best to stop immediately when a failure occurs.
         continueAfterFailure = false
-
-        // In UI tests it’s important to set the initial state - such as interface orientation - required for your tests before they run. The setUp method is a good place to do this.
-    }
-
-    override func tearDownWithError() throws {
-        // Put teardown code here. This method is called after the invocation of each test method in the class.
     }
 
     @MainActor
-    func testExample() throws {
-        // UI tests must launch the application that they test.
+    private func launch(seeded: Bool) -> XCUIApplication {
         let app = XCUIApplication()
+        app.launchArguments = ["-uiTesting"] + (seeded ? ["-uiTestingSeed"] : [])
+        // キーボードを英語にして、入力が崩れないようにする
+        app.launchArguments += ["-AppleLanguages", "(en)", "-AppleKeyboards", "(en_US@sw=QWERTY;hw=Automatic)"]
         app.launch()
-
-        // Use XCTAssert and related functions to verify your tests produce the correct results.
-        // XCUIAutomation Documentation
-        // https://developer.apple.com/documentation/xcuiautomation
+        return app
     }
 
     @MainActor
-    func testLaunchPerformance() throws {
-        // This measures how long it takes to launch your application.
-        measure(metrics: [XCTApplicationLaunchMetric()]) {
-            XCUIApplication().launch()
-        }
+    func testCompletingMovesToTheNextTaskAndCanBeUndone() throws {
+        let app = launch(seeded: true)
+        let title = app.staticTexts["recommendationTitle"]
+
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        XCTAssertEqual(title.label, "Write report")
+
+        app.buttons["completeButton"].tap()
+
+        XCTAssertTrue(app.staticTexts["recommendationTitle"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["recommendationTitle"].label, "Read paper")
+
+        let undo = app.buttons["undoButton"]
+        XCTAssertTrue(undo.waitForExistence(timeout: 3))
+        undo.tap()
+
+        let restored = expectation(
+            for: NSPredicate(format: "label == %@", "Write report"),
+            evaluatedWith: app.staticTexts["recommendationTitle"]
+        )
+        wait(for: [restored], timeout: 5)
+    }
+
+    @MainActor
+    func testQuickAddPutsTheTaskOnTheCard() throws {
+        let app = launch(seeded: false)
+
+        let field = app.textFields["quickAddField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText("Buy milk 10m\n")
+
+        let title = app.staticTexts["recommendationTitle"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        XCTAssertEqual(title.label, "Buy milk")
     }
 }

@@ -1,0 +1,41 @@
+# TaskFlow のテストを、push と pull request のたびに自動で回す
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    # iOS 26.5 を対象にしているので、それに対応した Xcode が入った macOS のランナーが要る
+    runs-on: macos-26
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: TaskFlow
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode を選ぶ（入っている中でいちばん新しいもの）
+        run: |
+          latest=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          sudo xcode-select -s "$latest"
+          xcodebuild -version
+
+      - name: シミュレータを選ぶ
+        id: simulator
+        run: |
+          id=$(xcrun simctl list devices available | grep -m1 -E "iPhone [0-9]+ " | grep -oE "[0-9A-F-]{36}")
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+          echo "使うシミュレータ: $id"
+
+      - name: 単体テストとUIテスト
+        run: |
+          xcodebuild test \
+            -project TaskFlow.xcodeproj \
+            -scheme TaskFlow \
+            -destination "id=${{ steps.simulator.outputs.id }}" \
+            -parallel-testing-enabled NO \
+            CODE_SIGNING_ALLOWED=NO

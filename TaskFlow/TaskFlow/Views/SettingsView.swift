@@ -102,10 +102,23 @@ struct SettingsView: View {
                         Text("\(hour)時").tag(hour)
                     }
                 }
+
+                if let ratio = viewModel.estimateRatio {
+                    LabeledContent(
+                        "見積もりと実際",
+                        value: String(format: "だいたい %.1f 倍", ratio)
+                    )
+                }
             } header: {
                 Text("1日")
             } footer: {
-                Text("「今日」が始まる時刻です。夜中まで作業する人は、4時などにすると、深夜の作業が前の日の分として数えられます。")
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("「今日」が始まる時刻です。夜中まで作業する人は、4時などにすると、深夜の作業が前の日の分として数えられます。")
+
+                    if viewModel.estimateRatio != nil {
+                        Text("集中画面で終えたタスクの、実際にかかった時間と見積もりの比べです。1行追加で時間を書かなかったときの初期値（いまは\(viewModel.quickAddDefaultMinutes)分）に使っています。")
+                    }
+                }
             }
 
             Section {

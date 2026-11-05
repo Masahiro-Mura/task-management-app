@@ -4,6 +4,9 @@ import Combine
 @MainActor
 final class HomeViewModel: ObservableObject {
 
+    /// 画面に出ている ViewModel。Siri やショートカットからの操作を、開いている画面にそのまま反映するのに使う
+    static weak var current: HomeViewModel?
+
     @Published private(set) var tasks: [TaskItem] = []
     @Published private(set) var recommendation: TaskRecommendation?
 
@@ -617,6 +620,7 @@ final class HomeViewModel: ObservableObject {
         }
 
         skippedUntil = store.load([UUID: Date].self, forKey: TaskStore.Key.skippedUntil) ?? [:]
+        skipCounts = store.load([UUID: Int].self, forKey: TaskStore.Key.skipCounts) ?? [:]
         recurringTasks = store.load([RecurringTask].self, forKey: TaskStore.Key.recurring) ?? []
         archivedTasks = store.load([TaskItem].self, forKey: TaskStore.Key.archived) ?? []
         restoreFocusSession()
@@ -626,6 +630,28 @@ final class HomeViewModel: ObservableObject {
 
         updateRecommendation()
         scheduleNotifications()
+    }
+
+    /// アプリとして起動したときの ViewModel
+    ///
+    /// UIテストで `-uiTesting` を付けて起動したときは、毎回空の専用の保存先を使い、案内を出さない。
+    /// `-uiTestingSeed` も付けると、決まったタスクを2つ入れる。
+    static func makeForApp(arguments: [String] = ProcessInfo.processInfo.arguments) -> HomeViewModel {
+        guard arguments.contains("-uiTesting") else {
+            return HomeViewModel()
+        }
+
+        let suiteName = "TaskFlowUITesting"
+        let userDefaults = UserDefaults(suiteName: suiteName) ?? .standard
+        userDefaults.removePersistentDomain(forName: suiteName)
+        userDefaults.set(true, forKey: "taskFlow.onboarded")
+
+        let viewModel = HomeViewModel(userDefaults: userDefaults, seedsSampleTasks: false)
+        if arguments.contains("-uiTestingSeed") {
+            viewModel.quickAdd("Write report 10m")
+            viewModel.quickAdd("Read paper 20m")
+        }
+        return viewModel
     }
 
     /// サンプルタスクは開発中のビルドでのみ入れる
@@ -691,10 +717,53 @@ final class HomeViewModel: ObservableObject {
         skippedUntil[task.id] = now().addingTimeInterval(Self.skipDuration)
         saveSkippedUntil()
 
-        // 気が乗らないのかもしれないので、軽いものにするか聞く（責めずに逃げ道を出す）
-        isOfferingLightMode = !prefersLight
+        // 何度も見送られているなら、大きすぎるのかもしれない。一度だけ、小さくするか冬眠させるかを聞く
+        skipCounts[task.id, default: 0] += 1
+        if skipCounts[task.id, default: 0] >= Self.repeatedSkipLimit {
+            skipCounts[task.id] = 0
+            repeatedSkipCandidate = tasks.first { $0.id == task.id }
+            isOfferingLightMode = false
+        } else {
+            // 気が乗らないのかもしれないので、軽いものにするか聞く（責めずに逃げ道を出す）
+            isOfferingLightMode = !prefersLight
+        }
+        saveSkipCounts()
 
         updateRecommendation()
+    }
+
+    // MARK: - 何度も見送られるタスク
+
+    /// 何回「今はやらない」にされたら、小さくするか冬眠させるかを聞くか
+    nonisolated static let repeatedSkipLimit = 3
+
+    /// 「今はやらない」にされた回数（取りかかったり、終えたり、手を入れたりすると 0 に戻る）
+    private var skipCounts: [UUID: Int] = [:]
+
+    /// 何度も見送られているので「小さくしてみますか？」と聞いているタスク
+    @Published private(set) var repeatedSkipCandidate: TaskItem?
+
+    /// 「小さくしてみますか？」を閉じる
+    func dismissRepeatedSkipOffer() {
+        repeatedSkipCandidate = nil
+    }
+
+    /// 見送られ続けているタスクを冬眠させる
+    func hibernate(_ task: TaskItem) {
+        repeatedSkipCandidate = nil
+        reschedule([task.id], to: .hibernate)
+    }
+
+    private func resetSkipCount(for taskID: UUID) {
+        guard skipCounts[taskID] != nil else {
+            return
+        }
+        skipCounts[taskID] = nil
+        saveSkipCounts()
+    }
+
+    private func saveSkipCounts() {
+        store.save(skipCounts, forKey: TaskStore.Key.skipCounts)
     }
 
     // MARK: - 気が乗らないとき
@@ -882,6 +951,7 @@ final class HomeViewModel: ObservableObject {
         }
 
         tasks[index].updatedAt = now()
+        resetSkipCount(for: id)
         focusSession = FocusSession(taskID: id, startedAt: now(), trialMinutes: trialMinutes)
         saveFocusSession()
         saveTasks()
@@ -927,6 +997,11 @@ final class HomeViewModel: ObservableObject {
         let startedAt = focusSession?.startedAt
 
         if completing, let task = focusedTask {
+            // 実際にかかった時間を覚えておく（見積もりの初期値を現実に近づけるため）
+            if let startedAt, let index = tasks.firstIndex(where: { $0.id == task.id }) {
+                let elapsed = now().timeIntervalSince(startedAt)
+                tasks[index].actualMinutes = max(1, Int((elapsed / 60).rounded(.up)))
+            }
             complete(task)
         }
 
@@ -1004,6 +1079,38 @@ final class HomeViewModel: ObservableObject {
         return true
     }
 
+    // MARK: - 見積もりと実際
+
+    /// 実際の時間から傾向を出すのに要る、集中画面で終えたタスクの数
+    nonisolated static let estimateSampleMinimum = 5
+
+    /// 最近、集中画面で終えたタスクの「実際の時間 ÷ 見積もり」のまん中の値。数が足りなければ nil
+    var estimateRatio: Double? {
+        let ratios = tasks
+            .filter { $0.isCompleted && $0.actualMinutes != nil && $0.estimatedMinutes > 0 }
+            .sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) }
+            .prefix(20)
+            .map { Double($0.actualMinutes ?? 0) / Double($0.estimatedMinutes) }
+            .sorted()
+
+        guard ratios.count >= Self.estimateSampleMinimum else {
+            return nil
+        }
+
+        let median = ratios[ratios.count / 2]
+        return min(max(median, 0.5), 2)
+    }
+
+    /// 1行追加で時間を書かなかったときの所要時間。実際の傾向がはっきりしていれば、それに合わせる
+    var quickAddDefaultMinutes: Int {
+        guard let ratio = estimateRatio, abs(ratio - 1) >= 0.15 else {
+            return Self.defaultQuickAddMinutes
+        }
+
+        let adjusted = Double(Self.defaultQuickAddMinutes) * ratio
+        return min(max(Int((adjusted / 5).rounded()) * 5, 5), 120)
+    }
+
     /// 1行の入力をどう読み取るか（入力欄の上に出す確認用）
     func previewQuickAdd(
         _ text: String,
@@ -1011,7 +1118,7 @@ final class HomeViewModel: ObservableObject {
     ) -> QuickAddParser.Result? {
         QuickAddParser.parse(
             text,
-            defaultMinutes: Self.defaultQuickAddMinutes,
+            defaultMinutes: quickAddDefaultMinutes,
             now: logicalNow,
             calendar: calendar,
             ignoring: ignoring
@@ -1061,6 +1168,7 @@ final class HomeViewModel: ObservableObject {
         }
 
         lastCompletedTask = tasks[index]
+        resetSkipCount(for: task.id)
         tasks[index].isCompleted = true
         tasks[index].completedAt = now()
         tasks[index].updatedAt = now()
@@ -1152,6 +1260,10 @@ final class HomeViewModel: ObservableObject {
 
         tasks[parentIndex].splitGroupID = groupID
         tasks[parentIndex].updatedAt = currentDate
+        resetSkipCount(for: parent.id)
+        if repeatedSkipCandidate?.id == parent.id {
+            repeatedSkipCandidate = nil
+        }
         // 一歩は元のタスクの直前に並べる（決めた順のまま、元のタスクより前になる）
         tasks.insert(step, at: parentIndex)
 
