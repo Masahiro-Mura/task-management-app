@@ -27,6 +27,18 @@ final class HomeViewModel: ObservableObject {
     /// 「今はやらない」にしたタスクと、推薦に戻る日時
     private var skippedUntil: [UUID: Date] = [:]
 
+    /// 気が乗らないので、軽い・短い作業だけを推薦しているか
+    @Published private(set) var prefersLight = false
+
+    /// 「今はやらない」のあとに「軽いものにしますか」と聞いているか
+    @Published private(set) var isOfferingLightMode = false
+
+    /// 軽い作業だけにしたら候補がなくなったか（ふだんの推薦ならある）
+    @Published private(set) var lightModeHasNoMatch = false
+
+    /// 優先度「高」にできるタスクの数
+    nonisolated static let maxHighPriorityTasks = 3
+
     private let decisionEngine = DecisionEngine()
     private let userDefaults: UserDefaults
     private let calendar: Calendar
@@ -79,8 +91,23 @@ final class HomeViewModel: ObservableObject {
                 return true
             }
 
+            if task.isPinnedForToday(at: currentDate, calendar: calendar) {
+                return true
+            }
+
             return isCarriedOver(task)
         }
+    }
+
+    /// 今日「今日やりたい」の印が付いているタスクのID
+    var pinnedTaskIDs: Set<UUID> {
+        let currentDate = now()
+        return Set(tasks.filter { $0.isPinnedForToday(at: currentDate, calendar: calendar) }.map(\.id))
+    }
+
+    /// 今日の欄にある持ち越し（冬眠中を除く）
+    var carriedOverTasks: [TaskItem] {
+        todayTasks.filter { isCarriedOver($0) }
     }
 
     /// 明日の欄に出すタスク。今日の欄に出るものは重ねて出さない
@@ -237,6 +264,144 @@ final class HomeViewModel: ObservableObject {
 
         skippedUntil[task.id] = now().addingTimeInterval(Self.skipDuration)
         saveSkippedUntil()
+
+        // 気が乗らないのかもしれないので、軽いものにするか聞く（責めずに逃げ道を出す）
+        isOfferingLightMode = !prefersLight
+
+        updateRecommendation()
+    }
+
+    // MARK: - 気が乗らないとき
+
+    /// 軽い・短い作業だけを推薦するかを切り替える
+    func setPrefersLight(_ prefersLight: Bool) {
+        self.prefersLight = prefersLight
+        isOfferingLightMode = false
+        updateRecommendation()
+    }
+
+    /// 「軽いものにしますか」を閉じる
+    func dismissLightOffer() {
+        isOfferingLightMode = false
+    }
+
+    // MARK: - 今日やりたい
+
+    /// 「今日やりたい」の印を付け外しする。日付はいじらない
+    func togglePinnedForToday(_ task: TaskItem) {
+        guard let index = tasks.firstIndex(where: { $0.id == task.id }) else {
+            return
+        }
+
+        let currentDate = now()
+        tasks[index].pinnedForTodayAt = tasks[index].isPinnedForToday(at: currentDate, calendar: calendar)
+            ? nil
+            : currentDate
+        tasks[index].updatedAt = currentDate
+        saveTasks()
+        updateRecommendation()
+    }
+
+    // MARK: - まとめて組み直す
+
+    enum RescheduleOption: CaseIterable {
+        case today
+        case tomorrow
+        case nextMonday
+        case clearDates
+        case hibernate
+
+        var title: String {
+            switch self {
+            case .today:
+                return "今日に"
+            case .tomorrow:
+                return "明日に"
+            case .nextMonday:
+                return "来週月曜に"
+            case .clearDates:
+                return "日付を外す（いつかやる）"
+            case .hibernate:
+                return "冬眠させる"
+            }
+        }
+    }
+
+    /// 選んだタスクの日付をまとめて変える
+    ///
+    /// - 今日／明日／来週月曜：予定日をその日にする。期限がその日より前なら、期限も同じ時刻のままその日に移す
+    /// - 日付を外す：予定日・期限・今日やりたいを外す
+    /// - 冬眠させる：日付を外し、すぐ冬眠に入るようにする
+    func reschedule(_ taskIDs: Set<UUID>, to option: RescheduleOption) {
+        let currentDate = now()
+        let startOfToday = calendar.startOfDay(for: currentDate)
+
+        let targetDay: Date?
+        switch option {
+        case .today:
+            targetDay = startOfToday
+        case .tomorrow:
+            targetDay = calendar.date(byAdding: .day, value: 1, to: startOfToday)
+        case .nextMonday:
+            // 月=0 … 日=6 として、次の週の月曜
+            let mondayBased = (calendar.component(.weekday, from: startOfToday) + 5) % 7
+            targetDay = calendar.date(byAdding: .day, value: 7 - mondayBased, to: startOfToday)
+        case .clearDates, .hibernate:
+            targetDay = nil
+        }
+
+        for index in tasks.indices where taskIDs.contains(tasks[index].id) && !tasks[index].isCompleted {
+            if let targetDay {
+                tasks[index].scheduledDate = targetDay
+
+                if let deadline = tasks[index].deadline, deadline < targetDay {
+                    let time = calendar.dateComponents([.hour, .minute, .second], from: deadline)
+                    tasks[index].deadline = calendar.date(
+                        bySettingHour: time.hour ?? 23,
+                        minute: time.minute ?? 59,
+                        second: time.second ?? 59,
+                        of: targetDay
+                    )
+                }
+
+                tasks[index].updatedAt = currentDate
+            } else {
+                tasks[index].scheduledDate = nil
+                tasks[index].deadline = nil
+                tasks[index].pinnedForTodayAt = nil
+
+                // 冬眠は「14日触っていない」で判定しているので、その日時まで戻す
+                tasks[index].updatedAt = option == .hibernate
+                    ? currentDate.addingTimeInterval(-TaskItem.dormancyInterval)
+                    : currentDate
+            }
+        }
+
+        saveTasks()
+        updateRecommendation()
+    }
+
+    // MARK: - 優先度「高」は3件まで
+
+    /// `taskID` 以外で、優先度「高」の未完了タスク
+    func otherHighPriorityTasks(excluding taskID: UUID?) -> [TaskItem] {
+        tasks.filter { $0.priority == .high && !$0.isCompleted && $0.id != taskID }
+    }
+
+    /// 優先度「高」をもう1件付けるには、どれかを外す必要があるか
+    func needsToLowerAHighPriority(excluding taskID: UUID?) -> Bool {
+        otherHighPriorityTasks(excluding: taskID).count >= Self.maxHighPriorityTasks
+    }
+
+    /// 優先度を「中」に戻す
+    func lowerPriority(of taskID: UUID) {
+        guard let index = tasks.firstIndex(where: { $0.id == taskID }) else {
+            return
+        }
+
+        tasks[index].priority = .medium
+        tasks[index].updatedAt = now()
+        saveTasks()
         updateRecommendation()
     }
 
@@ -294,7 +459,8 @@ final class HomeViewModel: ObservableObject {
             estimatedMinutes: parsed.estimatedMinutes,
             priority: .medium,
             scheduledDate: parsed.scheduledDate,
-            deadline: parsed.deadline
+            deadline: parsed.deadline,
+            isLight: parsed.isLight
         )
         return true
     }
@@ -384,7 +550,8 @@ final class HomeViewModel: ObservableObject {
         estimatedMinutes: Int,
         priority: TaskPriority,
         scheduledDate: Date?,
-        deadline: Date?
+        deadline: Date?,
+        isLight: Bool = false
     ) {
         let task = TaskItem(
             title: title,
@@ -392,7 +559,8 @@ final class HomeViewModel: ObservableObject {
             priority: priority,
             scheduledDate: scheduledDate,
             deadline: deadline,
-            updatedAt: now()
+            updatedAt: now(),
+            isLight: isLight
         )
 
         tasks.append(task)
@@ -527,17 +695,26 @@ final class HomeViewModel: ObservableObject {
             saveSkippedUntil()
         }
 
-        let context = DecisionContext(
+        var context = DecisionContext(
             availableMinutes: availableMinutes,
             currentDate: currentDate,
             skippedTaskIDs: Set(skippedUntil.keys),
-            calendar: calendar
+            calendar: calendar,
+            prefersLight: prefersLight
         )
 
         recommendation = decisionEngine.recommend(
             from: tasks,
             context: context
         )
+
+        // 軽いものだけにして候補がなくなったら、ふだんの推薦ならあるかを確かめる
+        if prefersLight, recommendation == nil {
+            context.prefersLight = false
+            lightModeHasNoMatch = decisionEngine.recommend(from: tasks, context: context) != nil
+        } else {
+            lightModeHasNoMatch = false
+        }
 
         noRecommendationSummary = recommendation == nil
             ? decisionEngine.summarizeNoRecommendation(from: tasks, context: context)

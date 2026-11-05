@@ -7,9 +7,13 @@ struct EditTaskView: View {
     let task: TaskItem
     let onSave: (TaskItem) -> Void
     let onSplit: ([TaskSplitPart]) -> Void
+    let onLowerPriority: (UUID) -> Void
 
     /// 前提として選べるタスク（自分自身と、循環するものを除く）
     private let selectablePrerequisites: [TaskItem]
+
+    /// このタスク以外で、優先度「高」の未完了タスク
+    private let otherHighPriorityTasks: [TaskItem]
 
     @State private var title: String
     @State private var estimatedMinutes: Int
@@ -20,6 +24,9 @@ struct EditTaskView: View {
     @State private var hasDeadline: Bool
     @State private var prerequisiteIDs: Set<UUID>
     @State private var isShowingSplit = false
+    @State private var lowering: UUID?
+    @State private var isLight: Bool
+    @State private var isPinnedForToday: Bool
 
     /// 分け方が決まったら、シートが閉じたあとに反映する
     @State private var pendingSplit: [TaskSplitPart]?
@@ -31,15 +38,23 @@ struct EditTaskView: View {
         task: TaskItem,
         allTasks: [TaskItem],
         onSave: @escaping (TaskItem) -> Void = { _ in },
-        onSplit: @escaping ([TaskSplitPart]) -> Void = { _ in }
+        onSplit: @escaping ([TaskSplitPart]) -> Void = { _ in },
+        onLowerPriority: @escaping (UUID) -> Void = { _ in }
     ) {
         self.task = task
         self.onSave = onSave
         self.onSplit = onSplit
+        self.onLowerPriority = onLowerPriority
         self.selectablePrerequisites = PrerequisiteRules.selectablePrerequisites(
             for: task,
             in: allTasks
         )
+        self.otherHighPriorityTasks = allTasks.filter {
+            $0.priority == .high && !$0.isCompleted && $0.id != task.id
+        }
+
+        _isLight = State(initialValue: task.isLight)
+        _isPinnedForToday = State(initialValue: task.isPinnedForToday(at: Date()))
 
         _prerequisiteIDs = State(
             initialValue: Set(task.prerequisiteIDs)
@@ -80,17 +95,23 @@ struct EditTaskView: View {
                     in: 5...480,
                     step: 5
                 )
+
+                Toggle("頭を使わない軽い作業", isOn: $isLight)
             }
 
-            Section("優先度") {
-                Picker("優先度", selection: $priority) {
-                    ForEach(TaskPriority.allCases, id: \.self) { priority in
-                        Text(priority.displayName)
-                            .tag(priority)
-                    }
+            if !task.isCompleted {
+                Section {
+                    Toggle("今日やりたい", isOn: $isPinnedForToday)
+                } footer: {
+                    Text("日付は変えずに、今日のおすすめで優先します。")
                 }
-                .pickerStyle(.segmented)
             }
+
+            PrioritySection(
+                priority: $priority,
+                lowering: $lowering,
+                otherHighPriorityTasks: otherHighPriorityTasks
+            )
 
             Section("実施予定日") {
                 Toggle(
@@ -193,8 +214,17 @@ struct EditTaskView: View {
                             .map(\.id)
                             .filter { prerequisiteIDs.contains($0) },
                         completedAt: task.completedAt,
-                        splitGroupID: task.splitGroupID
+                        splitGroupID: task.splitGroupID,
+                        // すでに今日付けた印なら、その日時のまま残す
+                        pinnedForTodayAt: isPinnedForToday
+                            ? (task.isPinnedForToday(at: Date()) ? task.pinnedForTodayAt : Date())
+                            : nil,
+                        isLight: isLight
                     )
+
+                    if priority == .high, let lowering {
+                        onLowerPriority(lowering)
+                    }
                     
                     onSave(updatedTask)
                     dismiss()

@@ -11,12 +11,14 @@ import Foundation
 /// 読む日付：今日・明日・明後日・（今週／来週）◯曜・11/20・11月20日
 /// 読む時刻：15時・15時30分・15時半・15:30・午後3時
 /// 「まで」「までに」が付けば期限、なければ予定日。所要時間は末尾だけを読み、5〜480分・5分単位に切り上げる。
+/// 「軽」「軽い」「（軽）」を単語として書くと、頭を使わない軽い作業の印になる（例：「メール整理 軽 10分」）。
 nonisolated enum QuickAddParser {
 
     /// 読み取る項目。読み取り結果の表示でタップすると、その項目を外せる
     enum Part: Hashable {
         case when
         case duration
+        case light
     }
 
     struct Result: Equatable {
@@ -30,6 +32,9 @@ nonisolated enum QuickAddParser {
 
         /// 所要時間が書かれていたか（書かれていなければ既定の時間）
         var durationWasWritten = false
+
+        /// 「軽」と書かれていたか
+        var isLight = false
     }
 
     static let minuteRange = 5...480
@@ -53,6 +58,14 @@ nonisolated enum QuickAddParser {
 
         let original = remaining
         var result = Result(title: original, estimatedMinutes: clamp(defaultMinutes))
+
+        // 軽い作業の印（単語として書かれたものだけ）
+        if !ignoring.contains(.light),
+           let match = remaining.firstMatch(of: lightPattern) {
+            result.isLight = true
+            remaining.replaceSubrange(match.range, with: " ")
+            remaining = remaining.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
 
         // 所要時間（末尾）
         if !ignoring.contains(.duration),
@@ -160,6 +173,9 @@ nonisolated enum QuickAddParser {
     }
 
     // MARK: - 読み取りの中身
+
+    /// 前後が空白か端にある「軽」「軽い」と、かっこ付きの「（軽）」「(軽)」
+    private static let lightPattern = #/(?:^|\s)軽い?(?=\s|$)|（軽）|\(軽\)/#
 
     /// 末尾の「1時間30分」「15分」「1h」「20m」などに一致する
     private static let durationPattern = #/\s*(?:(?<hours>\d+)\s*(?:時間|h))?\s*(?:(?<minutes>\d+)\s*(?:分|m))?\s*$/#

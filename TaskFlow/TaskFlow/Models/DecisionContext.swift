@@ -13,16 +13,21 @@ struct DecisionContext {
     /// 「明日以降の予定」の判定に使う暦
     var calendar: Calendar
 
+    /// 気が乗らないので、軽い・短い作業だけを推薦してほしいか
+    var prefersLight: Bool
+
     init(
         availableMinutes: Int,
         currentDate: Date = Date(),
         skippedTaskIDs: Set<UUID> = [],
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        prefersLight: Bool = false
     ) {
         self.availableMinutes = availableMinutes
         self.currentDate = currentDate
         self.skippedTaskIDs = skippedTaskIDs
         self.calendar = calendar
+        self.prefersLight = prefersLight
     }
 
     /// 予定日が明日以降なら、その日まで推薦しない

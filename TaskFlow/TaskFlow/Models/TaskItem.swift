@@ -41,6 +41,12 @@ struct TaskItem: Identifiable, Equatable, Codable {
     /// 「小さく分ける」で同じ元タスクから作られた部分に共通のID（元タスクのID）
     var splitGroupID: UUID?
 
+    /// 「今日やりたい」の印を付けた日時。付けた日だけ推薦で優先する
+    var pinnedForTodayAt: Date?
+
+    /// 頭を使わない軽い作業か。「気が乗らない」ときの推薦に使う
+    var isLight: Bool
+
     init(
         id: UUID = UUID(),
         title: String,
@@ -52,7 +58,9 @@ struct TaskItem: Identifiable, Equatable, Codable {
         prerequisiteIDs: [UUID] = [],
         updatedAt: Date = Date(),
         completedAt: Date? = nil,
-        splitGroupID: UUID? = nil
+        splitGroupID: UUID? = nil,
+        pinnedForTodayAt: Date? = nil,
+        isLight: Bool = false
     ) {
         self.id = id
         self.title = title
@@ -65,6 +73,8 @@ struct TaskItem: Identifiable, Equatable, Codable {
         self.updatedAt = updatedAt
         self.completedAt = completedAt
         self.splitGroupID = splitGroupID
+        self.pinnedForTodayAt = pinnedForTodayAt
+        self.isLight = isLight
     }
 
     init(from decoder: Decoder) throws {
@@ -110,6 +120,38 @@ struct TaskItem: Identifiable, Equatable, Codable {
             UUID.self,
             forKey: .splitGroupID
         )
+
+        pinnedForTodayAt = try container.decodeIfPresent(
+            Date.self,
+            forKey: .pinnedForTodayAt
+        )
+
+        isLight = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .isLight
+        ) ?? false
+    }
+}
+
+// MARK: - 今日やりたい・軽い作業
+
+extension TaskItem {
+
+    /// 「気が乗らない」ときに、軽い作業の印がなくても短い作業として扱う所要時間（分）
+    static let shortTaskMinutes = 15
+
+    /// 今日「今日やりたい」の印が付いているか
+    func isPinnedForToday(at now: Date, calendar: Calendar = .current) -> Bool {
+        guard !isCompleted, let pinnedForTodayAt else {
+            return false
+        }
+
+        return calendar.isDate(pinnedForTodayAt, inSameDayAs: now)
+    }
+
+    /// 気が乗らないときでも取りかかれる、軽いか短い作業か
+    var isEasyToStart: Bool {
+        isLight || estimatedMinutes <= Self.shortTaskMinutes
     }
 }
 

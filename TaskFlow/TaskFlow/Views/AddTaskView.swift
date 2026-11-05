@@ -1,26 +1,47 @@
 import SwiftUI
 
+/// 詳しく入れてタスクを追加する画面
 struct AddTaskView: View {
+
+    /// 入力された内容
+    struct NewTask {
+        var title: String
+        var estimatedMinutes: Int
+        var priority: TaskPriority
+        var scheduledDate: Date?
+        var deadline: Date?
+        var isLight: Bool
+
+        /// 優先度「高」の上限のために「中」に戻すタスク
+        var lowering: UUID?
+    }
 
     @Environment(\.dismiss) private var dismiss
 
     @State private var title = ""
     @State private var estimatedMinutes = 30
     @State private var priority: TaskPriority = .medium
-    
+    @State private var lowering: UUID?
+    @State private var isLight = false
+
     @State private var hasScheduledDate = false
     @State private var scheduledDate = Date()
-    
+
     @State private var hasDeadline = false
     @State private var deadline = Date()
 
-    let onSave: (String, Int, TaskPriority, Date?, Date?) -> Void
+    /// 優先度「高」の上限を確かめるための、ほかの「高」のタスク
+    var otherHighPriorityTasks: [TaskItem] = []
+
+    let onSave: (NewTask) -> Void
 
     var body: some View {
         NavigationStack {
             Form {
                 Section("タスク") {
                     TextField("タスク名", text: $title)
+
+                    Toggle("頭を使わない軽い作業", isOn: $isLight)
                 }
 
                 Section("所要時間") {
@@ -31,18 +52,14 @@ struct AddTaskView: View {
                         step: 5
                     )
                 }
-                
-                Section("優先度") {
-                    Picker("優先度", selection: $priority) {
-                        ForEach(TaskPriority.allCases, id: \.self) { priority in
-                            Text(priority.displayName)
-                                .tag(priority)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                }
-                
-                Section("実施予定日") {
+
+                PrioritySection(
+                    priority: $priority,
+                    lowering: $lowering,
+                    otherHighPriorityTasks: otherHighPriorityTasks
+                )
+
+                Section {
                     Toggle("実施予定日を設定する", isOn: $hasScheduledDate)
 
                     if hasScheduledDate {
@@ -52,6 +69,10 @@ struct AddTaskView: View {
                             displayedComponents: [.date, .hourAndMinute]
                         )
                     }
+                } header: {
+                    Text("実施予定日（なくても大丈夫）")
+                } footer: {
+                    Text("「このころやりたい」の目安です。過ぎても今日に流れてくるだけで、選び直さなくて大丈夫です。")
                 }
 
                 Section("期限") {
@@ -76,16 +97,16 @@ struct AddTaskView: View {
 
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") {
-                        let trimmedTitle = title.trimmingCharacters(
-                            in: .whitespacesAndNewlines
-                        )
-
                         onSave(
-                            trimmedTitle,
-                            estimatedMinutes,
-                            priority,
-                            hasScheduledDate ? scheduledDate : nil,
-                            hasDeadline ? deadline : nil
+                            NewTask(
+                                title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+                                estimatedMinutes: estimatedMinutes,
+                                priority: priority,
+                                scheduledDate: hasScheduledDate ? scheduledDate : nil,
+                                deadline: hasDeadline ? deadline : nil,
+                                isLight: isLight,
+                                lowering: priority == .high ? lowering : nil
+                            )
                         )
 
                         dismiss()
@@ -102,5 +123,5 @@ struct AddTaskView: View {
 }
 
 #Preview {
-    AddTaskView { _, _, _, _, _ in }
+    AddTaskView { _ in }
 }

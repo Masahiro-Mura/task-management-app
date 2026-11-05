@@ -14,6 +14,10 @@ enum RecommendationFactor: Equatable {
     case higherPriority
     /// 次点より所要時間が短い
     case shorter
+    /// 「今日やりたい」の印が付いている
+    case pinnedToday
+    /// 気が乗らないときに、軽い作業の印が付いている
+    case lighter
     /// 条件が並んでいて決め手がない
     case none
 }
@@ -61,7 +65,8 @@ struct DecisionEngine {
 
     /// タスク一覧から、現在実行すべきタスクを1件推薦する
     ///
-    /// 並び順は「期限が24時間以内のもの（同士は期限が早い順）→ 優先度 → 期限 → 所要時間の短さ」。
+    /// 並び順は「期限が24時間以内のもの（同士は期限が早い順）→（気が乗らないときは軽い作業）→ 今日やりたい → 優先度 → 期限 → 所要時間の短さ」。
+    /// 気が乗らないとき（`prefersLight`）は、軽いか短い作業だけを候補にする。
     ///
     /// - Parameters:
     ///   - tasks: 判断対象となる全タスク
@@ -78,6 +83,7 @@ struct DecisionEngine {
             .filter { !$0.isDormant(at: context.currentDate) }
             .filter { !context.skippedTaskIDs.contains($0.id) }
             .filter { !context.isScheduledLater($0) }
+            .filter { !context.prefersLight || $0.isEasyToStart }
             .filter { task in
                 isExecutable(
                     task,
@@ -86,7 +92,7 @@ struct DecisionEngine {
                 )
             }
             .sorted { lhs, rhs in
-                if let comparison = compare(lhs, rhs, now: context.currentDate) {
+                if let comparison = compare(lhs, rhs, context: context) {
                     return comparison.lhsComesFirst
                 }
 
@@ -104,7 +110,7 @@ struct DecisionEngine {
             factor = compare(
                 recommendedTask,
                 candidates[1],
-                now: context.currentDate
+                context: context
             )?.factor ?? .none
         }
 
@@ -217,9 +223,10 @@ struct DecisionEngine {
     private func compare(
         _ lhs: TaskItem,
         _ rhs: TaskItem,
-        now: Date
+        context: DecisionContext
     ) -> (lhsComesFirst: Bool, factor: RecommendationFactor)? {
 
+        let now = context.currentDate
         let lhsIsUrgent = isUrgent(lhs, now: now)
         let rhsIsUrgent = isUrgent(rhs, now: now)
 
@@ -233,6 +240,17 @@ struct DecisionEngine {
            let rhsDeadline = rhs.deadline,
            lhsDeadline != rhsDeadline {
             return (lhsDeadline < rhsDeadline, .earlierDeadline)
+        }
+
+        if context.prefersLight, lhs.isLight != rhs.isLight {
+            return (lhs.isLight, .lighter)
+        }
+
+        let lhsIsPinned = lhs.isPinnedForToday(at: now, calendar: context.calendar)
+        let rhsIsPinned = rhs.isPinnedForToday(at: now, calendar: context.calendar)
+
+        if lhsIsPinned != rhsIsPinned {
+            return (lhsIsPinned, .pinnedToday)
         }
 
         if lhs.priority != rhs.priority {
@@ -277,7 +295,7 @@ struct DecisionEngine {
         guard let lead = leadPhrase(
             for: task,
             factor: factor,
-            now: context.currentDate
+            context: context
         ) else {
             return fit
         }
@@ -288,12 +306,21 @@ struct DecisionEngine {
     private func leadPhrase(
         for task: TaskItem,
         factor: RecommendationFactor,
-        now: Date
+        context: DecisionContext
     ) -> String? {
+
+        let now = context.currentDate
 
         // 期限が24時間以内なら、決め手が何であっても残り時間を一番に伝える
         if isUrgent(task, now: now), let deadline = task.deadline {
             return remainingTimePhrase(until: deadline, now: now)
+        }
+
+        // 気が乗らないときは、軽さ・短さを一番に伝える
+        if context.prefersLight {
+            return task.isLight
+                ? "頭を使わずにできる軽い作業で"
+                : "\(task.estimatedMinutes)分で終わる短い作業で"
         }
 
         switch factor {
@@ -315,6 +342,12 @@ struct DecisionEngine {
 
         case .shorter:
             return "ほかのタスクより短く"
+
+        case .pinnedToday:
+            return "今日やりたいと決めていて"
+
+        case .lighter:
+            return "頭を使わずにできる軽い作業で"
 
         case .none:
             return nil

@@ -12,6 +12,7 @@ struct ContentView: View {
     @State private var ignoredQuickAddParts: Set<QuickAddParser.Part> = []
     @State private var celebration: Celebration?
     @State private var isShowingDoneToday = false
+    @State private var isShowingCarryOver = false
 
     /// 完了した瞬間に出すお祝いの表示
     private struct Celebration: Identifiable, Equatable {
@@ -38,8 +39,15 @@ struct ContentView: View {
                     } else {
                         availableMinutesPicker
 
+                        if viewModel.isOfferingLightMode {
+                            lightModeOffer
+                                .transition(.opacity)
+                        }
+
                         Group {
-                            if let recommendation = viewModel.recommendation {
+                            if viewModel.lightModeHasNoMatch {
+                                lightModeNoMatchCard
+                            } else if let recommendation = viewModel.recommendation {
                                 recommendationCard(recommendation)
                                     .id(recommendation.task.id)
                                     .transition(.opacity)
@@ -108,13 +116,20 @@ struct ContentView: View {
                 }
             }
             .sheet(isPresented: $isShowingAddTask) {
-                AddTaskView { title, estimatedMinutes, priority, scheduledDate, deadline in
+                AddTaskView(
+                    otherHighPriorityTasks: viewModel.otherHighPriorityTasks(excluding: nil)
+                ) { newTask in
+                    if let lowering = newTask.lowering {
+                        viewModel.lowerPriority(of: lowering)
+                    }
+
                     viewModel.addTask(
-                        title: title,
-                        estimatedMinutes: estimatedMinutes,
-                        priority: priority,
-                        scheduledDate: scheduledDate,
-                        deadline: deadline
+                        title: newTask.title,
+                        estimatedMinutes: newTask.estimatedMinutes,
+                        priority: newTask.priority,
+                        scheduledDate: newTask.scheduledDate,
+                        deadline: newTask.deadline,
+                        isLight: newTask.isLight
                     )
                 }
             }
@@ -216,9 +231,15 @@ struct ContentView: View {
     /// 今使える時間の選択
     private var availableMinutesPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("今使える時間")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+            HStack {
+                Text("今使える時間")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                lightModeToggle
+            }
 
             Picker(
                 "今使える時間",
@@ -380,14 +401,19 @@ struct ContentView: View {
 
         if !todayTasks.isEmpty {
             let carriedOverCount = todayTasks.filter { viewModel.isCarriedOver($0) }.count
-            let openCount = todayTasks.filter { !$0.isCompleted }.count
+            let openTasks = todayTasks.filter { !$0.isCompleted }
+            let openCount = openTasks.count
+            let openMinutes = openTasks.reduce(0) { $0 + $1.estimatedMinutes }
 
+            VStack(alignment: .leading, spacing: 12) {
             DisclosureGroup(isExpanded: $isTodayExpanded) {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(todayTasks) { task in
                         TaskRowView(
                             task: task,
-                            note: viewModel.isCarriedOver(task) ? "持ち越し" : nil,
+                            note: viewModel.isCarriedOver(task)
+                                ? "持ち越し"
+                                : viewModel.pinnedTaskIDs.contains(task.id) ? "今日やりたい" : nil,
                             onToggleCompletion: {
                                 viewModel.toggleCompletion(for: task)
                             }
@@ -405,11 +431,27 @@ struct ContentView: View {
                     openCount == 0
                         ? "今日の分は終わりました"
                         : carriedOverCount > 0
-                            ? "今日 残り\(openCount)件（持ち越し \(carriedOverCount)）"
-                            : "今日 残り\(openCount)件",
+                            ? "今日 残り\(openCount)件・約\(DoneTodayView.formatMinutes(openMinutes))（持ち越し \(carriedOverCount)）"
+                            : "今日 残り\(openCount)件・約\(DoneTodayView.formatMinutes(openMinutes))",
                     systemImage: "sun.max"
                 )
                 .font(.headline)
+            }
+
+                if carriedOverCount > 0 {
+                    Button {
+                        isShowingCarryOver = true
+                    } label: {
+                        Label("持ち越し\(carriedOverCount)件をまとめて整理する", systemImage: "arrow.uturn.forward")
+                            .font(.subheadline)
+                    }
+                    .buttonStyle(.bordered)
+                    .sheet(isPresented: $isShowingCarryOver) {
+                        CarryOverView(tasks: viewModel.carriedOverTasks) { ids, option in
+                            viewModel.reschedule(ids, to: option)
+                        }
+                    }
+                }
             }
             .padding()
             .background(.thinMaterial)
@@ -471,7 +513,7 @@ struct ContentView: View {
             let when = full.deadline.map { ("期限 " + viewModel.describeQuickAddDate($0, includesTime: full.includesTime), "flag") }
                 ?? full.scheduledDate.map { (viewModel.describeQuickAddDate($0, includesTime: full.includesTime), "calendar") }
 
-            if when != nil || full.durationWasWritten {
+            if when != nil || full.durationWasWritten || full.isLight {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         if let when {
@@ -480,6 +522,10 @@ struct ContentView: View {
 
                         if full.durationWasWritten {
                             quickAddChip("\(full.estimatedMinutes)分", systemImage: "clock", part: .duration)
+                        }
+
+                        if full.isLight {
+                            quickAddChip("軽い作業", systemImage: "leaf", part: .light)
                         }
                     }
                 }
@@ -569,6 +615,7 @@ struct ContentView: View {
             tasks: viewModel.allTasks,
             dormantTaskIDs: viewModel.dormantTaskIDs,
             tomorrowTaskIDs: Set(viewModel.tomorrowTasks.map(\.id)),
+            pinnedTaskIDs: viewModel.pinnedTaskIDs,
             onToggleCompletion: { task in
                 viewModel.toggleCompletion(for: task)
             },
@@ -583,6 +630,15 @@ struct ContentView: View {
             },
             onSplit: { task, parts in
                 viewModel.splitTask(task, into: parts)
+            },
+            onTogglePin: { task in
+                viewModel.togglePinnedForToday(task)
+            },
+            onLowerPriority: { taskID in
+                viewModel.lowerPriority(of: taskID)
+            },
+            onReschedule: { ids, option in
+                viewModel.reschedule(ids, to: option)
             }
         )
     }
@@ -596,8 +652,87 @@ struct ContentView: View {
             },
             onSplit: { parts in
                 viewModel.splitTask(task, into: parts)
+            },
+            onLowerPriority: { taskID in
+                viewModel.lowerPriority(of: taskID)
             }
         )
+    }
+
+    // MARK: - 気が乗らないとき
+
+    /// 軽い・短い作業だけにする切り替え。いつでも押せる
+    private var lightModeToggle: some View {
+        Button {
+            viewModel.setPrefersLight(!viewModel.prefersLight)
+        } label: {
+            Label(
+                viewModel.prefersLight ? "軽いものだけ" : "気が乗らない",
+                systemImage: viewModel.prefersLight ? "leaf.fill" : "leaf"
+            )
+            .font(.footnote)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .foregroundStyle(viewModel.prefersLight ? Color.green : Color.secondary)
+            .background(
+                (viewModel.prefersLight ? Color.green : Color.secondary).opacity(0.12),
+                in: Capsule()
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint(viewModel.prefersLight ? "ふだんの推薦に戻します" : "軽い作業と短い作業だけを推薦します")
+    }
+
+    /// 「今はやらない」のあとに出す、軽いものへの逃げ道
+    private var lightModeOffer: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "leaf")
+                .foregroundStyle(.green)
+
+            Text("気が乗らないときは、軽いものにしますか？")
+                .font(.subheadline)
+
+            Spacer(minLength: 0)
+
+            Button("軽いものに") {
+                viewModel.setPrefersLight(true)
+            }
+            .font(.subheadline)
+            .fontWeight(.semibold)
+
+            Button {
+                viewModel.dismissLightOffer()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            .accessibilityLabel("閉じる")
+        }
+        .padding(12)
+        .background(.green.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    /// 軽い作業だけにしたら候補がなかったとき
+    private var lightModeNoMatchCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("軽い作業や\(TaskItem.shortTaskMinutes)分以内の作業がありません", systemImage: "leaf")
+                .font(.headline)
+
+            Text("タスクの編集画面で「頭を使わない軽い作業」にしておくと、こういうときに出てきます。")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            Button("ふだんのおすすめに戻す") {
+                viewModel.setPrefersLight(false)
+            }
+            .buttonStyle(.bordered)
+            .padding(.top, 4)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.thinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
     }
 }
 
