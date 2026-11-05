@@ -387,10 +387,8 @@ struct ContentView: View {
             .buttonStyle(.bordered)
             .controlSize(.large)
 
-            // 大きいタスクは、全部やらなくても手をつけられる入り口を添える
-            if task.estimatedMinutes >= Self.bigTaskMinutes {
-                bigTaskShortcuts(for: task)
-            }
+            // 全部やらなくても手をつけられる入り口は、どのタスクにも添える
+            startShortcuts(for: task)
 
             // くり返しの回は、その回だけ休める
             if task.recurringID != nil {
@@ -413,15 +411,9 @@ struct ContentView: View {
         }
     }
 
-    /// 所要時間と、中以外の優先度
+    /// 所要時間。優先度は選び方と理由文には効いているので、ここには出さない（見ても取りかかる気持ちにはつながらないため）
     private func details(for task: TaskItem) -> String {
-        var parts = ["所要時間 \(task.estimatedMinutes)分"]
-
-        if task.priority != .medium {
-            parts.append("優先度 \(task.priority.displayName)")
-        }
-
-        return parts.joined(separator: " · ")
+        "所要時間 \(task.estimatedMinutes)分"
     }
 
     /// 推薦できるタスクがないときに、その内訳と次の一手を示す
@@ -485,7 +477,7 @@ struct ContentView: View {
                         Text("「\(task.title)」なら、こうして始められます")
                             .foregroundStyle(.secondary)
 
-                        bigTaskShortcuts(for: task)
+                        startShortcuts(for: task)
                     }
                     .padding(.top, 6)
                 }
@@ -782,12 +774,10 @@ struct ContentView: View {
         )
     }
 
-    // MARK: - 大きいタスクの入り口
+    // MARK: - 取りかかる入り口
 
-    /// この所要時間以上のタスクには、「5分だけ」「最初の一歩」を添える
-    private static let bigTaskMinutes = 30
-
-    private func bigTaskShortcuts(for task: TaskItem) -> some View {
+    /// 「5分だけやる」「最初の一歩を決める」。全部やる気になれなくても、手をつけられるようにする
+    private func startShortcuts(for task: TaskItem) -> some View {
         HStack(spacing: 16) {
             Button {
                 viewModel.startFocus(on: task.id, trialMinutes: HomeViewModel.trialFocusMinutes)
