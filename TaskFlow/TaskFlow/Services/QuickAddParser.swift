@@ -44,6 +44,9 @@ nonisolated enum QuickAddParser {
 
     static let minuteRange = 5...480
 
+    /// 「11/3」のように過ぎた日付を書いたとき、この日数以内なら今年の日付として読む
+    static let recentPastDays = 60
+
     /// - Parameter ignoring: 読み取らずにタイトルの文字のまま残す項目
     /// - Returns: タイトルが空ならnil
     static func parse(
@@ -342,8 +345,10 @@ nonisolated enum QuickAddParser {
             return nil
         }
 
-        // 過ぎた日付なら来年のその日
-        if thisYear < startOfToday {
+        // 少し前の日付（60日以内）は今年のもの（期限切れ・持ち越し）として読む。それより前なら来年のその日
+        if thisYear < startOfToday,
+           let limit = calendar.date(byAdding: .day, value: -recentPastDays, to: startOfToday),
+           thisYear < limit {
             return calendar.date(byAdding: .year, value: 1, to: thisYear)
         }
         return thisYear

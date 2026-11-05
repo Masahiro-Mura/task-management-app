@@ -121,7 +121,11 @@ struct QuickAddParserTests {
     func readsMonthDayAndRollsPastDatesToNextYear() {
         #expect(parse("11/20 15:30 打ち合わせ")?.scheduledDate == date(2026, 11, 20, 15, 30))
         #expect(parse("11/20 15:30 打ち合わせ")?.title == "打ち合わせ")
-        #expect(parse("11月3日に申込")?.scheduledDate == date(2027, 11, 3))
+        // 少し前の日付は今年のもの（持ち越し・期限切れ）として読む
+        #expect(parse("11月3日に申込")?.scheduledDate == date(2026, 11, 3))
+        #expect(parse("11月3日までに申込")?.deadline == date(2026, 11, 3, 23, 59, 59))
+        // ずっと前の日付は来年
+        #expect(parse("1月10日に申込")?.scheduledDate == date(2027, 1, 10))
         #expect(parse("2/30に申込")?.scheduledDate == nil)
     }
 

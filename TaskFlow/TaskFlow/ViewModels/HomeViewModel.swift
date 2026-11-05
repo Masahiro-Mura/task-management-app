@@ -19,7 +19,7 @@ final class HomeViewModel: ObservableObject {
     /// 集中して取りかかっているタスク
     @Published private(set) var focusSession: FocusSession?
 
-    struct FocusSession: Equatable {
+    struct FocusSession: Equatable, Codable {
         let taskID: UUID
         let startedAt: Date
 
@@ -53,15 +53,17 @@ final class HomeViewModel: ObservableObject {
 
     /// くり返すタスクのひな形
     @Published private(set) var recurringTasks: [RecurringTask] = []
-    private let recurringStorageKey = "taskFlow.recurring"
 
     private let decisionEngine = DecisionEngine()
     private let userDefaults: UserDefaults
     private let calendar: Calendar
     private let now: () -> Date
-    private let tasksStorageKey = "taskFlow.tasks"
-    private let availableMinutesStorageKey = "taskFlow.availableMinutes"
-    private let skippedUntilStorageKey = "taskFlow.skippedUntil"
+    private let availableMinutesStorageKey = TaskStore.Key.availableMinutes
+
+    /// 保存先（キーと読み書きは `TaskStore` にまとめた）
+    private var store: TaskStore {
+        TaskStore(userDefaults: userDefaults)
+    }
 
     /// 「今はやらない」で推薦から外す時間
     nonisolated static let skipDuration: TimeInterval = 60 * 60
@@ -70,7 +72,7 @@ final class HomeViewModel: ObservableObject {
     nonisolated static let defaultQuickAddMinutes = 30
 
     /// 読み込めなかった保存データの退避先キーの接頭辞
-    static let unreadableTasksKeyPrefix = "taskFlow.tasks.unreadable."
+    static let unreadableTasksKeyPrefix = TaskStore.Key.unreadableTasksPrefix
 
     /// ホームで選べる空き時間（分）
     nonisolated static let availableMinuteOptions = [15, 30, 45, 60, 90]
@@ -193,7 +195,6 @@ final class HomeViewModel: ObservableObject {
 
     /// 手放したタスク（削除ではなく保管）
     @Published private(set) var archivedTasks: [TaskItem] = []
-    private let archivedStorageKey = "taskFlow.archived"
     private let lastLetGoPromptStorageKey = "taskFlow.lastLetGoPrompt"
 
     private func isOldCompleted(_ task: TaskItem) -> Bool {
@@ -204,6 +205,23 @@ final class HomeViewModel: ObservableObject {
         let completedAt = task.completedAt ?? task.updatedAt
         let limit = now().addingTimeInterval(-TimeInterval(Self.completedHideDays) * 24 * 60 * 60)
         return completedAt <= limit
+    }
+
+    /// 完了してからこの日数がたったものは、保存データからも消す（データが増え続けないように）
+    nonisolated static let completedKeepDays = 365
+
+    /// 完了して1年たったものを消す
+    ///
+    /// - Returns: 消したものがあったか
+    private func pruneOldCompletedTasks() -> Bool {
+        let limit = now().addingTimeInterval(-TimeInterval(Self.completedKeepDays) * 24 * 60 * 60)
+        let before = tasks.count
+
+        tasks.removeAll { task in
+            task.isCompleted && (task.completedAt ?? task.updatedAt) <= limit
+        }
+
+        return tasks.count != before
     }
 
     /// 「すべてのタスク」に出すもの。完了して7日たったものは除く
@@ -281,19 +299,8 @@ final class HomeViewModel: ObservableObject {
         saveArchivedTasks()
     }
 
-    private func loadArchivedTasks() -> [TaskItem] {
-        guard let data = userDefaults.data(forKey: archivedStorageKey),
-              let saved = try? JSONDecoder().decode([TaskItem].self, from: data) else {
-            return []
-        }
-        return saved
-    }
-
     private func saveArchivedTasks() {
-        guard let data = try? JSONEncoder().encode(archivedTasks) else {
-            return
-        }
-        userDefaults.set(data, forKey: archivedStorageKey)
+        store.save(archivedTasks, forKey: TaskStore.Key.archived)
     }
 
     // MARK: - 書き出し・読み込み
@@ -556,7 +563,7 @@ final class HomeViewModel: ObservableObject {
             availableMinutes = savedMinutes
         }
 
-        switch loadTasks() {
+        switch store.loadTasks() {
         case .loaded(let savedTasks):
             tasks = savedTasks
 
@@ -567,16 +574,19 @@ final class HomeViewModel: ObservableObject {
 
         case .unreadable(let data):
             // 次の保存で上書きされて失われないよう、元のデータを退避しておく
-            backUpUnreadableTasks(data)
+            store.backUpUnreadableTasks(data, at: now())
         }
 
-        if migrateLegacySteps() {
+        let migrated = StepChain.migrateLegacySteps(in: &tasks)
+        let pruned = pruneOldCompletedTasks()
+        if migrated || pruned {
             saveTasks()
         }
 
-        skippedUntil = loadSkippedUntil()
-        recurringTasks = loadRecurringTasks()
-        archivedTasks = loadArchivedTasks()
+        skippedUntil = store.load([UUID: Date].self, forKey: TaskStore.Key.skippedUntil) ?? [:]
+        recurringTasks = store.load([RecurringTask].self, forKey: TaskStore.Key.recurring) ?? []
+        archivedTasks = store.load([TaskItem].self, forKey: TaskStore.Key.archived) ?? []
+        restoreFocusSession()
         loadNotificationSettings()
         usesFocusShortcut = userDefaults.bool(forKey: focusShortcutStorageKey)
 
@@ -686,79 +696,18 @@ final class HomeViewModel: ObservableObject {
 
     // MARK: - まとめて組み直す
 
-    enum RescheduleOption: CaseIterable {
-        case today
-        case tomorrow
-        case nextMonday
-        case clearDates
-        case hibernate
+    typealias RescheduleOption = TaskRescheduler.Option
 
-        var title: String {
-            switch self {
-            case .today:
-                return "今日に"
-            case .tomorrow:
-                return "明日に"
-            case .nextMonday:
-                return "来週月曜に"
-            case .clearDates:
-                return "日付を外す（いつかやる）"
-            case .hibernate:
-                return "冬眠させる"
-            }
-        }
-    }
-
-    /// 選んだタスクの日付をまとめて変える
-    ///
-    /// - 今日／明日／来週月曜：予定日をその日にする。期限がその日より前なら、期限も同じ時刻のままその日に移す
-    /// - 日付を外す：予定日・期限・今日やりたいを外す
-    /// - 冬眠させる：日付を外し、すぐ冬眠に入るようにする
+    /// 選んだタスクの日付をまとめて変える（中身は `TaskRescheduler`）
     func reschedule(_ taskIDs: Set<UUID>, to option: RescheduleOption) {
-        let currentDate = now()
-        let startOfToday = calendar.startOfDay(for: currentDate)
-
-        let targetDay: Date?
-        switch option {
-        case .today:
-            targetDay = startOfToday
-        case .tomorrow:
-            targetDay = calendar.date(byAdding: .day, value: 1, to: startOfToday)
-        case .nextMonday:
-            // 月=0 … 日=6 として、次の週の月曜
-            let mondayBased = (calendar.component(.weekday, from: startOfToday) + 5) % 7
-            targetDay = calendar.date(byAdding: .day, value: 7 - mondayBased, to: startOfToday)
-        case .clearDates, .hibernate:
-            targetDay = nil
-        }
-
-        for index in tasks.indices where taskIDs.contains(tasks[index].id) && !tasks[index].isCompleted {
-            if let targetDay {
-                tasks[index].scheduledDate = targetDay
-
-                if let deadline = tasks[index].deadline, deadline < targetDay {
-                    let time = calendar.dateComponents([.hour, .minute, .second], from: deadline)
-                    tasks[index].deadline = calendar.date(
-                        bySettingHour: time.hour ?? 23,
-                        minute: time.minute ?? 59,
-                        second: time.second ?? 59,
-                        of: targetDay
-                    )
-                }
-
-                tasks[index].updatedAt = currentDate
-            } else {
-                tasks[index].scheduledDate = nil
-                tasks[index].deadline = nil
-                tasks[index].pinnedForTodayAt = nil
-
-                // 冬眠は「14日触っていない」で判定しているので、その日時まで戻す
-                tasks[index].updatedAt = option == .hibernate
-                    ? currentDate.addingTimeInterval(-TaskItem.dormancyInterval)
-                    : currentDate
-            }
-        }
-
+        TaskRescheduler.reschedule(
+            taskIDs,
+            to: option,
+            in: &tasks,
+            now: now(),
+            startOfToday: calendar.startOfDay(for: now()),
+            calendar: calendar
+        )
         saveTasks()
         updateRecommendation()
     }
@@ -839,68 +788,20 @@ final class HomeViewModel: ObservableObject {
         updateRecommendation()
     }
 
-    /// くり返しのひな形から、今日の回を出す。持ち越さない回で過ぎたものは静かに流す
+    /// くり返しのひな形から、今日の回を出す（中身は `RecurrenceScheduler`）
     private func refreshOccurrences() {
-        let today = calendar.startOfDay(for: now())
-        let carriesOver = Dictionary(
-            uniqueKeysWithValues: recurringTasks.map { ($0.id, $0.recurrence.carriesOver) }
-        )
-
-        let before = tasks.count
-        tasks.removeAll { task in
-            guard let recurringID = task.recurringID,
-                  let occurrenceDate = task.occurrenceDate,
-                  !task.isCompleted,
-                  occurrenceDate < today else {
-                return false
-            }
-            return !(carriesOver[recurringID] ?? true)
-        }
-        var changed = tasks.count != before
-
-        for recurring in recurringTasks where recurring.occurs(on: today, calendar: calendar) {
-            let alreadyExists = tasks.contains { task in
-                task.recurringID == recurring.id
-                    && task.occurrenceDate.map { calendar.isDate($0, inSameDayAs: today) } == true
-            }
-
-            guard !alreadyExists else {
-                continue
-            }
-
-            tasks.append(
-                TaskItem(
-                    title: recurring.title,
-                    estimatedMinutes: recurring.estimatedMinutes,
-                    priority: recurring.priority,
-                    scheduledDate: today,
-                    updatedAt: now(),
-                    isLight: recurring.isLight,
-                    recurringID: recurring.id,
-                    occurrenceDate: today
-                )
-            )
-            changed = true
-        }
-
-        if changed {
+        if RecurrenceScheduler.refreshOccurrences(
+            in: &tasks,
+            recurringTasks: recurringTasks,
+            now: now(),
+            calendar: calendar
+        ) {
             saveTasks()
         }
     }
 
-    private func loadRecurringTasks() -> [RecurringTask] {
-        guard let data = userDefaults.data(forKey: recurringStorageKey),
-              let saved = try? JSONDecoder().decode([RecurringTask].self, from: data) else {
-            return []
-        }
-        return saved
-    }
-
     private func saveRecurringTasks() {
-        guard let data = try? JSONEncoder().encode(recurringTasks) else {
-            return
-        }
-        userDefaults.set(data, forKey: recurringStorageKey)
+        store.save(recurringTasks, forKey: TaskStore.Key.recurring)
     }
 
     // MARK: - 優先度「高」は3件まで
@@ -948,6 +849,7 @@ final class HomeViewModel: ObservableObject {
 
         tasks[index].updatedAt = now()
         focusSession = FocusSession(taskID: id, startedAt: now(), trialMinutes: trialMinutes)
+        saveFocusSession()
         saveTasks()
 
         // 集中している間は、TaskFlow の通知を出さない
@@ -957,6 +859,24 @@ final class HomeViewModel: ObservableObject {
     /// 「5分だけ」のあと、そのまま続ける（目安をタスクの所要時間に戻す）
     func continueFocus() {
         focusSession?.trialMinutes = nil
+        saveFocusSession()
+    }
+
+    /// 集中しているあいだにアプリが終わっても、戻ってきたら続きから再開できるよう保存する
+    private func saveFocusSession() {
+        store.save(focusSession, forKey: TaskStore.Key.focusSession)
+    }
+
+    /// 保存していた集中を戻す。タスクがもうないか終わっているか、始めてから半日以上たっていれば戻さない
+    private func restoreFocusSession() {
+        guard let saved = store.load(FocusSession.self, forKey: TaskStore.Key.focusSession),
+              tasks.contains(where: { $0.id == saved.taskID && !$0.isCompleted }),
+              now().timeIntervalSince(saved.startedAt) < 12 * 60 * 60 else {
+            store.save(FocusSession?.none, forKey: TaskStore.Key.focusSession)
+            return
+        }
+
+        focusSession = saved
     }
 
     /// 集中しているタスク
@@ -977,6 +897,7 @@ final class HomeViewModel: ObservableObject {
         }
 
         focusSession = nil
+        saveFocusSession()
 
         // 集中していた間に出るはずだった期限の通知は、ここで出す
         scheduleNotifications(missedSince: startedAt)
@@ -1143,7 +1064,7 @@ final class HomeViewModel: ObservableObject {
 
     /// 元のタスクの一歩（決めた順。済んだものも含む）
     func steps(of parentID: UUID) -> [TaskItem] {
-        tasks.filter { $0.parentTaskID == parentID }
+        StepChain.steps(of: parentID, in: tasks)
     }
 
     /// 一歩なら、その位置
@@ -1222,112 +1143,14 @@ final class HomeViewModel: ObservableObject {
 
     /// まだ済んでいない一歩の順番を入れ替える
     func moveOpenSteps(of parentID: UUID, fromOffsets source: IndexSet, toOffset destination: Int) {
-        let original = steps(of: parentID).filter { !$0.isCompleted }
-
-        // 並べ替え（List の onMove と同じ意味。SwiftUI に頼らずに書く）
-        let moving = source.sorted().map { original[$0] }
-        var open = original.enumerated().filter { !source.contains($0.offset) }.map(\.element)
-        let insertAt = destination - source.filter { $0 < destination }.count
-        open.insert(contentsOf: moving, at: min(max(insertAt, 0), open.count))
-
-        let openIDs = Set(open.map(\.id))
-        tasks.removeAll { openIDs.contains($0.id) }
-
-        guard let parentIndex = tasks.firstIndex(where: { $0.id == parentID }) else {
-            return
-        }
-
-        tasks.insert(contentsOf: open, at: parentIndex)
-        rebuildStepChain(for: parentID)
+        StepChain.moveOpenSteps(of: parentID, fromOffsets: source, toOffset: destination, in: &tasks)
         saveTasks()
         updateRecommendation()
     }
 
-    /// 一歩を、決めた順につなぎ直す
-    ///
-    /// まだ済んでいない一歩を順に前提としてつなぎ、元のタスクは最後の一歩を待つ。
-    /// 元のタスクがもともと待っていた前提（一歩以外）は、最初の一歩が待つ。
+    /// 一歩を、決めた順につなぎ直す（中身は `StepChain`）
     private func rebuildStepChain(for parentID: UUID) {
-        guard let parentIndex = tasks.firstIndex(where: { $0.id == parentID }) else {
-            return
-        }
-
-        let stepIndices = tasks.indices.filter { tasks[$0].parentTaskID == parentID }
-        let stepIDs = Set(stepIndices.map { tasks[$0].id })
-
-        var external: [UUID] = []
-        for id in tasks[parentIndex].prerequisiteIDs + stepIndices.flatMap({ tasks[$0].prerequisiteIDs })
-        where !stepIDs.contains(id) && id != parentID && !external.contains(id) {
-            external.append(id)
-        }
-
-        var previous: UUID?
-        for index in stepIndices where !tasks[index].isCompleted {
-            tasks[index].prerequisiteIDs = previous.map { [$0] } ?? external
-            previous = tasks[index].id
-        }
-
-        tasks[parentIndex].prerequisiteIDs = external + (previous.map { [$0] } ?? [])
-    }
-
-    /// 以前の形（「元のタスク名：一歩」というタイトル）の一歩を、元のタスクにぶら下がる形に直す
-    ///
-    /// 以前は一歩の一歩も作れたので「元：一歩目：二歩目」のように重なっていることがある。
-    /// 元のタスク名を外したあと、同じ元のタスクのほかの一歩の名前が頭に付いていれば、それも外す。
-    private func migrateLegacySteps() -> Bool {
-        var changed = false
-        var touchedParents: Set<UUID> = []
-
-        for index in tasks.indices where tasks[index].parentTaskID == nil {
-            guard let groupID = tasks[index].splitGroupID,
-                  groupID != tasks[index].id,
-                  let parent = tasks.first(where: { $0.id == groupID }) else {
-                continue
-            }
-
-            let prefix = CompletionMessages.baseTitle(of: parent.title) + "："
-            guard tasks[index].title.hasPrefix(prefix) else {
-                continue
-            }
-
-            tasks[index].title = String(tasks[index].title.dropFirst(prefix.count))
-            tasks[index].parentTaskID = parent.id
-            touchedParents.insert(parent.id)
-            changed = true
-        }
-
-        // 一歩の名前の頭に、ほかの一歩の名前が重なっていたら外す（短い名前から順に試す）
-        for index in tasks.indices {
-            guard let parentID = tasks[index].parentTaskID else {
-                continue
-            }
-
-            let siblingTitles = tasks
-                .filter { $0.parentTaskID == parentID && $0.id != tasks[index].id }
-                .map(\.title)
-                .sorted { $0.count > $1.count }
-
-            var stripped = true
-            while stripped {
-                stripped = false
-                for sibling in siblingTitles where !sibling.isEmpty {
-                    let prefix = sibling + "："
-                    if tasks[index].title.hasPrefix(prefix), tasks[index].title.count > prefix.count {
-                        tasks[index].title = String(tasks[index].title.dropFirst(prefix.count))
-                        touchedParents.insert(parentID)
-                        changed = true
-                        stripped = true
-                        break
-                    }
-                }
-            }
-        }
-
-        for parentID in touchedParents {
-            rebuildStepChain(for: parentID)
-        }
-
-        return changed
+        StepChain.rebuild(parentID: parentID, in: &tasks)
     }
 
     /// 「次の一歩を決めますか？」を閉じる
@@ -1335,21 +1158,8 @@ final class HomeViewModel: ObservableObject {
         nextStepCandidate = nil
     }
 
-    private func loadSkippedUntil() -> [UUID: Date] {
-        guard let data = userDefaults.data(forKey: skippedUntilStorageKey),
-              let saved = try? JSONDecoder().decode([UUID: Date].self, from: data) else {
-            return [:]
-        }
-
-        return saved
-    }
-
     private func saveSkippedUntil() {
-        guard let data = try? JSONEncoder().encode(skippedUntil) else {
-            return
-        }
-
-        userDefaults.set(data, forKey: skippedUntilStorageKey)
+        store.save(skippedUntil, forKey: TaskStore.Key.skippedUntil)
     }
 
     /// 新しいタスクを追加する
@@ -1450,53 +1260,12 @@ final class HomeViewModel: ObservableObject {
         updateRecommendation()
     }
     
-    /// 現在のタスク一覧をUserDefaultsへ保存する
+    /// 現在のタスク一覧を保存する
     private func saveTasks() {
-        guard let data = try? JSONEncoder().encode(tasks) else {
-            return
-        }
-
-        userDefaults.set(data, forKey: tasksStorageKey)
+        store.save(tasks, forKey: TaskStore.Key.tasks)
 
         // 期限や完了が変わったら、通知も予定し直す（オフなら何もしない）
         scheduleNotifications()
-    }
-
-    private enum LoadResult {
-        case loaded([TaskItem])
-        case notFound
-        case unreadable(Data)
-    }
-
-    /// UserDefaultsから保存済みのタスク一覧を読み込む
-    private func loadTasks() -> LoadResult {
-        guard let data = userDefaults.data(
-            forKey: tasksStorageKey
-        ) else {
-            return .notFound
-        }
-
-        guard let savedTasks = try? JSONDecoder().decode(
-            [TaskItem].self,
-            from: data
-        ) else {
-            return .unreadable(data)
-        }
-
-        return .loaded(savedTasks)
-    }
-
-    /// 読み込めなかった保存データを、日時つきの別キーへ退避する
-    private func backUpUnreadableTasks(_ data: Data) {
-        let timestamp = ISO8601DateFormatter().string(from: Date())
-
-        userDefaults.set(
-            data,
-            forKey: Self.unreadableTasksKeyPrefix + timestamp
-        )
-
-        // 起動のたびに同じデータを退避し直さないよう、元のキーは空にする
-        userDefaults.removeObject(forKey: tasksStorageKey)
     }
 
     /// 現在のタスク一覧から推薦を再計算する
