@@ -709,7 +709,8 @@ final class HomeViewModel: ObservableObject {
         notifier: NotificationScheduling? = nil,
         sharedDefaults: UserDefaults? = nil,
         reloadWidgets: @escaping () -> Void = {},
-        focusActivity: FocusActivityPresenting? = nil
+        focusActivity: FocusActivityPresenting? = nil,
+        suggestSteps: @escaping (String) async -> StepSuggester.Suggestions = { await StepSuggester.suggestions(for: $0) }
     ) {
         self.userDefaults = userDefaults
         self.calendar = calendar
@@ -718,6 +719,7 @@ final class HomeViewModel: ObservableObject {
         self.sharedDefaults = sharedDefaults
         self.reloadWidgets = reloadWidgets
         self.focusActivity = focusActivity
+        self.suggestSteps = suggestSteps
 
         let savedMinutes = userDefaults.integer(forKey: availableMinutesStorageKey)
         if Self.availableMinuteOptions.contains(savedMinutes) {
@@ -1516,13 +1518,14 @@ final class HomeViewModel: ObservableObject {
     /// 大きいタスクに一歩を足す（いちばん後ろに）
     ///
     /// 全部を分けなくても、一歩だけ決めれば推薦に出るようにする。ホームには、まだ済んでいない最初の一歩だけが出る。
-    func addStep(to parent: TaskItem, title stepTitle: String, minutes: Int) {
-        undoable(String(localized: "「\(stepTitle.trimmingCharacters(in: .whitespacesAndNewlines))」を足しました。")) {
+    @discardableResult
+    func addStep(to parent: TaskItem, title stepTitle: String, minutes: Int) -> UUID? {
+        return undoable(String(localized: "「\(stepTitle.trimmingCharacters(in: .whitespacesAndNewlines))」を足しました。")) {
             let trimmed = stepTitle.trimmingCharacters(in: .whitespacesAndNewlines)
 
             guard !trimmed.isEmpty,
                   let parentIndex = tasks.firstIndex(where: { $0.id == parent.id }) else {
-                return
+                return nil
             }
 
             let currentDate = now()
@@ -1552,6 +1555,64 @@ final class HomeViewModel: ObservableObject {
             rebuildStepChain(for: parent.id)
             saveTasks()
             updateRecommendation()
+            return step.id
+        }
+    }
+
+    // MARK: - 最初の一歩の案（カード）
+
+    /// この所要時間（分）以上のタスクは、重く感じやすいので、カードに最初の一歩の案を出す
+    nonisolated static let heavyTaskMinutes = 30
+
+    /// 案から始める一歩の所要時間（分）
+    nonisolated static let ideaStepMinutes = 5
+
+    /// 一歩の案を作る（端末内のAIか、決まった型）。テストでは決まった答えを返す
+    private let suggestSteps: (String) async -> StepSuggester.Suggestions
+
+    /// タスクごとの、最初の一歩の案
+    @Published private(set) var firstStepIdeas: [UUID: StepSuggester.Suggestions] = [:]
+
+    /// カードに最初の一歩の案を出すか
+    ///
+    /// 重く考えてしまいやすいもの（長い・一度「あとで」にした・持ち越している）で、まだ一歩を決めていないものだけ。
+    /// 一歩そのものや、一歩がもうあるタスクには出さない。
+    func shouldSuggestFirstStep(for task: TaskItem) -> Bool {
+        guard !task.isCompleted,
+              task.parentTaskID == nil,
+              !steps(of: task.id).contains(where: { !$0.isCompleted }) else {
+            return false
+        }
+
+        return task.estimatedMinutes >= Self.heavyTaskMinutes
+            || (skipCounts[task.id] ?? 0) > 0
+            || isCarriedOver(task)
+    }
+
+    /// 最初の一歩の案を用意する（一度作ったら、名前が変わるまで使い回す）
+    func loadFirstStepIdeas(for task: TaskItem) async {
+        guard shouldSuggestFirstStep(for: task), firstStepIdeas[task.id] == nil else {
+            return
+        }
+
+        let ideas = await suggestSteps(CompletionMessages.baseTitle(of: task.title))
+        guard !ideas.steps.isEmpty else {
+            return
+        }
+        firstStepIdeas[task.id] = ideas
+    }
+
+    /// 案の一歩を足して、その一歩に取りかかる。足した一歩のID（なければ nil）
+    ///
+    /// 全体ではなく、最初の5分だけに向き合えばいいようにする。足した一歩は「元に戻す」で取り消せる。
+    @discardableResult
+    func startWithFirstStep(_ stepTitle: String, of task: TaskItem) -> UUID? {
+        undoable(String(localized: "「\(stepTitle)」から始めました")) {
+            guard let stepID = addStep(to: task, title: stepTitle, minutes: Self.ideaStepMinutes) else {
+                return nil
+            }
+            startFocus(on: stepID)
+            return stepID
         }
     }
 
@@ -1709,6 +1770,11 @@ final class HomeViewModel: ObservableObject {
 
     /// 既存タスクの内容を更新する
     func updateTask(_ updatedTask: TaskItem) {
+        // 名前が変わったら、一歩の案は作り直す
+        if tasks.first(where: { $0.id == updatedTask.id })?.title != updatedTask.title {
+            firstStepIdeas[updatedTask.id] = nil
+        }
+
         undoable(String(localized: "「\(updatedTask.title)」を保存しました")) {
             guard let index = tasks.firstIndex(
                 where: { $0.id == updatedTask.id }

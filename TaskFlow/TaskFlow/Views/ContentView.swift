@@ -17,6 +17,7 @@ struct ContentView: View {
     @State private var firstStepTask: TaskItem?
     @State private var isShowingLetGo = false
     @State private var isShowingFullReason = false
+    @State private var firstStepIdeaIndex = 0
     @State private var isQuickAddOpen = false
     @FocusState private var isQuickAddFocused: Bool
 
@@ -282,6 +283,7 @@ struct ContentView: View {
             }
             .onChange(of: viewModel.recommendation?.task.id) { _, _ in
                 isShowingFullReason = false
+                firstStepIdeaIndex = 0
             }
             .onChange(of: isQuickAddFocused) { _, isFocused in
                 // 何も書かずに入力欄を離れたら、丸い＋に戻す
@@ -330,6 +332,10 @@ struct ContentView: View {
                 lightModeToggle
             }
 
+            if viewModel.prefersLight {
+                lightModeStatus
+            }
+
             Picker(
                 "今使える時間",
                 selection: Binding(
@@ -369,6 +375,8 @@ struct ContentView: View {
             }
 
             cardPills(for: recommendation)
+
+            firstStepIdeaRow(for: task)
 
             if isShowingFullReason {
                 Text(recommendation.reason)
@@ -424,6 +432,83 @@ struct ContentView: View {
         .overlay {
             RoundedRectangle(cornerRadius: 20)
                 .stroke(.blue.opacity(0.4), lineWidth: 1)
+        }
+        .task(id: task.id) {
+            await viewModel.loadFirstStepIdeas(for: task)
+        }
+    }
+
+    /// 重く感じやすいタスクに出す「最初の一歩なら」。押すと、その一歩を足して5分だけ取りかかる
+    ///
+    /// 全体を考えると手が止まるので、最初の5分だけを差し出す。↻ で別の案に替えられる。
+    @ViewBuilder
+    private func firstStepIdeaRow(for task: TaskItem) -> some View {
+        if viewModel.shouldSuggestFirstStep(for: task),
+           let ideas = viewModel.firstStepIdeas[task.id] {
+            let idea = ideas.steps[firstStepIdeaIndex % ideas.steps.count]
+
+            HStack(spacing: 8) {
+                Button {
+                    beginWithFirstStep(idea, of: task)
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: ideas.isFromAI ? "sparkles" : "shoeprints.fill")
+                            .foregroundStyle(.blue)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(ideas.isFromAI ? "AIの案・最初の\(HomeViewModel.ideaStepMinutes)分なら" : "最初の\(HomeViewModel.ideaStepMinutes)分なら")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+
+                            Text(idea)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundStyle(.primary)
+                                .multilineTextAlignment(.leading)
+                        }
+
+                        Spacer(minLength: 0)
+
+                        Image(systemName: "play.circle.fill")
+                            .font(.title2)
+                            .foregroundStyle(.blue)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("この一歩を足して、\(HomeViewModel.ideaStepMinutes)分だけ取りかかります")
+                .accessibilityIdentifier("firstStepIdeaButton")
+
+                if ideas.steps.count > 1 {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            firstStepIdeaIndex += 1
+                        }
+                    } label: {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 32, height: 32)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("ほかの案")
+                }
+            }
+            .padding(12)
+            .background(.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+            .transition(.opacity)
+        }
+    }
+
+    /// 案の一歩から始める。設定していれば、ショートカットで集中モードもオンにする
+    private func beginWithFirstStep(_ idea: String, of task: TaskItem) {
+        guard viewModel.startWithFirstStep(idea, of: task) != nil else {
+            return
+        }
+
+        if viewModel.focusSession != nil, let url = viewModel.focusShortcutURL(starting: true) {
+            openURL(url)
         }
     }
 
@@ -624,9 +709,15 @@ struct ContentView: View {
                         Text("「\(task.title)」なら、こうして始められます")
                             .foregroundStyle(.secondary)
 
+                        // 時間に入らない大きいタスクこそ、最初の5分の案があると手をつけやすい
+                        firstStepIdeaRow(for: task)
+
                         startShortcuts(for: task)
                     }
                     .padding(.top, 6)
+                    .task(id: task.id) {
+                        await viewModel.loadFirstStepIdeas(for: task)
+                    }
                 }
             }
         }
@@ -1141,25 +1232,36 @@ struct ContentView: View {
     // MARK: - 気が乗らないとき
 
     /// 軽い・短い作業だけにする切り替え。いつでも押せる
+    ///
+    /// 名前は「軽いものだけ」のまま変えず、オンのときは塗りとチェックで示す（押すと名前が変わると、今どちらか分からないため）
     private var lightModeToggle: some View {
-        Button {
-            viewModel.setPrefersLight(!viewModel.prefersLight)
+        let isOn = viewModel.prefersLight
+
+        return Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                viewModel.setPrefersLight(!isOn)
+            }
         } label: {
-            Label(
-                viewModel.prefersLight ? "軽いものだけ" : "気が乗らない",
-                systemImage: viewModel.prefersLight ? "leaf.fill" : "leaf"
-            )
-            .font(.footnote)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .foregroundStyle(viewModel.prefersLight ? Color.green : Color.secondary)
-            .background(
-                (viewModel.prefersLight ? Color.green : Color.secondary).opacity(0.12),
-                in: Capsule()
-            )
+            Label("軽いものだけ", systemImage: isOn ? "checkmark" : "leaf")
+                .font(.footnote)
+                .fontWeight(isOn ? .semibold : .regular)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .foregroundStyle(isOn ? Color.white : Color.secondary)
+                .background(isOn ? Color.green : Color.secondary.opacity(0.12), in: Capsule())
         }
         .buttonStyle(.plain)
-        .accessibilityHint(viewModel.prefersLight ? "ふだんの推薦に戻します" : "軽い作業と短い作業だけを推薦します")
+        .accessibilityValue(isOn ? Text("オン") : Text("オフ"))
+        .accessibilityHint(isOn ? "ふだんの推薦に戻します" : "軽い作業と短い作業だけを推薦します")
+        .accessibilityIdentifier("lightModeToggle")
+    }
+
+    /// 軽いものだけにしているあいだ、今の選び方を1行で伝える
+    private var lightModeStatus: some View {
+        Label("いまは軽いものだけを出しています", systemImage: "leaf.fill")
+            .font(.caption)
+            .foregroundStyle(.green)
+            .transition(.opacity)
     }
 
     /// 「今はやらない」のあとに出す、軽いものへの逃げ道
