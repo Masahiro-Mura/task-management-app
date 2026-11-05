@@ -716,6 +716,7 @@ final class HomeViewModel: ObservableObject {
 
         skippedUntil[task.id] = now().addingTimeInterval(Self.skipDuration)
         saveSkippedUntil()
+        lastSkippedTask = task
 
         // 何度も見送られているなら、大きすぎるのかもしれない。一度だけ、小さくするか冬眠させるかを聞く
         skipCounts[task.id, default: 0] += 1
@@ -730,6 +731,36 @@ final class HomeViewModel: ObservableObject {
         saveSkipCounts()
 
         updateRecommendation()
+    }
+
+    /// 直前に「あとで」にしたタスク。「1時間後にまた出します」と、取り消しを出す
+    @Published private(set) var lastSkippedTask: TaskItem?
+
+    /// 直前の「あとで」を取り消して、そのタスクをまた推薦に戻す
+    func undoSkip() {
+        guard let task = lastSkippedTask else {
+            return
+        }
+
+        lastSkippedTask = nil
+        skippedUntil[task.id] = nil
+        saveSkippedUntil()
+
+        if let count = skipCounts[task.id], count > 0 {
+            skipCounts[task.id] = count - 1
+            saveSkipCounts()
+        }
+        isOfferingLightMode = false
+        if repeatedSkipCandidate?.id == task.id {
+            repeatedSkipCandidate = nil
+        }
+
+        updateRecommendation()
+    }
+
+    /// 「あとで」の知らせを閉じる
+    func dismissSkipFeedback() {
+        lastSkippedTask = nil
     }
 
     // MARK: - 何度も見送られるタスク
@@ -1378,13 +1409,44 @@ final class HomeViewModel: ObservableObject {
         updateRecommendation()
     }
 
+    /// 直前に削除したもの。「元に戻す」で戻せるよう、少しのあいだだけ覚えておく
+    struct DeletedTasks {
+        /// 削除したタスク（一歩も含む）と、一覧のなかでの元の位置。一歩の順番を崩さずに戻すため
+        let tasks: [(index: Int, task: TaskItem)]
+
+        /// 削除したタスクを前提にしていたタスク
+        let dependentIDs: [UUID]
+
+        /// 表示に使う、消したタスク
+        let main: TaskItem
+    }
+
+    @Published private(set) var lastDeleted: DeletedTasks?
+
     /// 指定したタスクを削除する
     func deleteTask(_ task: TaskItem) {
+        let removed = tasks.enumerated()
+            .filter { $0.element.id == task.id || $0.element.parentTaskID == task.id }
+            .map { (index: $0.offset, task: $0.element) }
+        guard let main = removed.first(where: { $0.task.id == task.id })?.task else {
+            return
+        }
+
         tasks.removeAll { $0.id == task.id || $0.parentTaskID == task.id }
 
         // 削除したタスクを前提にしていたタスクが、推薦されないまま残らないようにする
-        for index in tasks.indices {
+        var dependentIDs: [UUID] = []
+        for index in tasks.indices where tasks[index].prerequisiteIDs.contains(task.id) {
             tasks[index].prerequisiteIDs.removeAll { $0 == task.id }
+            dependentIDs.append(tasks[index].id)
+        }
+        lastDeleted = DeletedTasks(tasks: removed, dependentIDs: dependentIDs, main: main)
+
+        if lastCompletedTask?.id == task.id {
+            lastCompletedTask = nil
+        }
+        if lastSkippedTask?.id == task.id {
+            lastSkippedTask = nil
         }
 
         // 一歩を消したなら、残りの一歩をつなぎ直す
@@ -1396,6 +1458,37 @@ final class HomeViewModel: ObservableObject {
         updateRecommendation()
     }
     
+    /// 直前の削除を取り消す
+    func undoDelete() {
+        guard let deleted = lastDeleted else {
+            return
+        }
+
+        lastDeleted = nil
+        let existingIDs = Set(tasks.map(\.id))
+        for entry in deleted.tasks where !existingIDs.contains(entry.task.id) {
+            tasks.insert(entry.task, at: min(entry.index, tasks.count))
+        }
+
+        for index in tasks.indices where deleted.dependentIDs.contains(tasks[index].id) {
+            if !tasks[index].prerequisiteIDs.contains(deleted.main.id) {
+                tasks[index].prerequisiteIDs.append(deleted.main.id)
+            }
+        }
+
+        if let parentID = deleted.main.parentTaskID {
+            rebuildStepChain(for: parentID)
+        }
+
+        saveTasks()
+        updateRecommendation()
+    }
+
+    /// 削除の「元に戻す」を閉じる
+    func dismissDeleteUndo() {
+        lastDeleted = nil
+    }
+
     /// 既存タスクの内容を更新する
     func updateTask(_ updatedTask: TaskItem) {
         guard let index = tasks.firstIndex(

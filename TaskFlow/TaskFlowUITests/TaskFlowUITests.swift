@@ -53,13 +53,44 @@ final class TaskFlowUITests: XCTestCase {
     func testQuickAddPutsTheTaskOnTheCard() throws {
         let app = launch(seeded: false)
 
+        // 真ん中下の＋を押すと、入力欄が開いて書ける
+        let addButton = app.buttons["addButton"]
+        XCTAssertTrue(addButton.waitForExistence(timeout: 5))
+        addButton.tap()
+
         let field = app.textFields["quickAddField"]
-        XCTAssertTrue(field.waitForExistence(timeout: 5))
-        field.tap()
+        XCTAssertTrue(field.waitForExistence(timeout: 3))
         field.typeText("Buy milk 10m\n")
 
         let title = app.staticTexts["recommendationTitle"]
         XCTAssertTrue(title.waitForExistence(timeout: 5))
         XCTAssertEqual(title.label, "Buy milk")
+
+        // 書き終えたら、また＋に戻る
+        XCTAssertTrue(addButton.waitForExistence(timeout: 3))
+    }
+
+    @MainActor
+    func testDeletingFromTheCardCanBeUndone() throws {
+        let app = launch(seeded: true)
+        let title = app.staticTexts["recommendationTitle"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        XCTAssertEqual(title.label, "Write report")
+
+        app.buttons["cardMenu"].tap()
+        let delete = app.buttons["deleteFromCardButton"]
+        XCTAssertTrue(delete.waitForExistence(timeout: 3))
+        delete.tap()
+
+        let undo = app.buttons["undoDeleteButton"]
+        XCTAssertTrue(undo.waitForExistence(timeout: 3))
+        XCTAssertEqual(app.staticTexts["recommendationTitle"].label, "Read paper")
+        undo.tap()
+
+        let restored = expectation(
+            for: NSPredicate(format: "label == %@", "Write report"),
+            evaluatedWith: app.staticTexts["recommendationTitle"]
+        )
+        wait(for: [restored], timeout: 5)
     }
 }

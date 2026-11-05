@@ -27,6 +27,9 @@ struct TaskRecommendation {
     let task: TaskItem
     let factor: RecommendationFactor
     let reason: String
+
+    /// カードに小さく添える、決め手だけの短い言葉（「期限まであと3時間」「すぐ終わる」など）
+    let shortReason: String
 }
 
 /// 推薦できるタスクがないときの内訳
@@ -121,6 +124,11 @@ struct DecisionEngine {
             task: recommendedTask,
             factor: factor,
             reason: makeReason(
+                for: recommendedTask,
+                factor: factor,
+                context: context
+            ),
+            shortReason: makeShortReason(
                 for: recommendedTask,
                 factor: factor,
                 context: context
@@ -310,6 +318,48 @@ struct DecisionEngine {
         }
 
         return lead + "、" + fit
+    }
+
+    /// 決め手だけを短く言う。長い理由文と同じ順で決める
+    private func makeShortReason(
+        for task: TaskItem,
+        factor: RecommendationFactor,
+        context: DecisionContext
+    ) -> String {
+
+        let now = context.currentDate
+
+        if let deadline = task.deadline {
+            if deadline <= now {
+                return "今なら片づく"
+            }
+            if isUrgent(task, now: now) {
+                return String(remainingTimePhrase(until: deadline, now: now).dropLast())
+            }
+        }
+
+        if context.prefersLight {
+            return task.isLight ? "軽い作業" : "すぐ終わる"
+        }
+
+        switch factor {
+        case .onlyCandidate:
+            return "今できるのはこれ"
+        case .urgentDeadline, .earlierDeadline:
+            return "期限が近い"
+        case .hasDeadline:
+            return "期限あり"
+        case .higherPriority:
+            return "優先度\(task.priority.displayName)"
+        case .shorter:
+            return "すぐ終わる"
+        case .pinnedToday:
+            return "今日やると決めた"
+        case .lighter:
+            return "軽い作業"
+        case .none:
+            return "時間に収まる"
+        }
     }
 
     private func leadPhrase(

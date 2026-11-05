@@ -16,6 +16,9 @@ struct ContentView: View {
     @State private var isShowingCarryOver = false
     @State private var firstStepTask: TaskItem?
     @State private var isShowingLetGo = false
+    @State private var isShowingFullReason = false
+    @State private var isQuickAddOpen = false
+    @FocusState private var isQuickAddFocused: Bool
 
     /// 完了した瞬間に出すお祝いの表示
     private struct Celebration: Identifiable, Equatable {
@@ -32,6 +35,9 @@ struct ContentView: View {
 
     /// 完了後に「元に戻す」を出しておく時間
     private let undoDuration: Duration = .seconds(5)
+
+    /// 「あとで」の知らせを出しておく時間（「やっぱり今やる」を押せるよう、少し長め）
+    private let skipFeedbackDuration: Duration = .seconds(8)
 
     /// 広い画面での中身の最大の幅
     private static let readableWidth: CGFloat = 640
@@ -85,6 +91,7 @@ struct ContentView: View {
                 .frame(maxWidth: Self.readableWidth)
                 .frame(maxWidth: .infinity)
             }
+            .scrollDismissesKeyboard(.interactively)
             .overlay {
                 if let celebration {
                     CelebrationView(
@@ -99,19 +106,26 @@ struct ContentView: View {
                 newValue != nil
             }
             .safeAreaInset(edge: .bottom) {
-                VStack(spacing: 8) {
-                    if let completed = viewModel.lastCompletedTask {
-                        undoBanner(for: completed)
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
-                    }
+                VStack(spacing: 10) {
+                    bottomBanner
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
 
-                    quickAddBar
+                    if isQuickAddOpen {
+                        quickAddBar
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    } else {
+                        addButton
+                            .transition(.scale(scale: 0.8).combined(with: .opacity))
+                    }
                 }
                 .padding(.horizontal)
                 .padding(.bottom, 8)
                 .frame(maxWidth: Self.readableWidth)
                 .frame(maxWidth: .infinity)
                 .animation(.easeInOut(duration: 0.2), value: viewModel.lastCompletedTask?.id)
+                .animation(.easeInOut(duration: 0.2), value: viewModel.lastDeleted?.main.id)
+                .animation(.easeInOut(duration: 0.2), value: viewModel.lastSkippedTask?.id)
+                .animation(.spring(duration: 0.3), value: isQuickAddOpen)
             }
             .navigationTitle("今やること")
             .toolbar {
@@ -131,16 +145,6 @@ struct ContentView: View {
                         Image(systemName: "gearshape")
                     }
                     .accessibilityLabel("設定")
-                }
-
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        isShowingAddTask = true
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                    .accessibilityLabel("詳しく入れて追加")
-                    .keyboardShortcut("n", modifiers: .command)
                 }
             }
             .navigationDestination(item: $editingTaskID) { taskID in
@@ -283,6 +287,38 @@ struct ContentView: View {
                     viewModel.dismissUndo()
                 }
             }
+            .task(id: viewModel.lastDeleted?.main.id) {
+                guard viewModel.lastDeleted != nil else {
+                    return
+                }
+
+                try? await Task.sleep(for: undoDuration)
+
+                if !Task.isCancelled {
+                    viewModel.dismissDeleteUndo()
+                }
+            }
+            .task(id: viewModel.lastSkippedTask?.id) {
+                guard viewModel.lastSkippedTask != nil else {
+                    return
+                }
+
+                try? await Task.sleep(for: skipFeedbackDuration)
+
+                if !Task.isCancelled {
+                    viewModel.dismissSkipFeedback()
+                }
+            }
+            .onChange(of: viewModel.recommendation?.task.id) { _, _ in
+                isShowingFullReason = false
+            }
+            .onChange(of: isQuickAddFocused) { _, isFocused in
+                // 何も書かずに入力欄を離れたら、丸い＋に戻す
+                if !isFocused, quickAddText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    isQuickAddOpen = false
+                    ignoredQuickAddParts = []
+                }
+            }
         }
     }
 
@@ -297,7 +333,7 @@ struct ContentView: View {
             Text("最初のタスクを入れましょう")
                 .font(.headline)
 
-            Text("下の入力欄に「請求書を送る 15分」のように書くと、所要時間つきで追加できます。")
+            Text("下の＋を押して「明日までにレポート書かないと 30分」のように書くと、そのまま追加できます。")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -339,54 +375,35 @@ struct ContentView: View {
 
     // MARK: - 推薦カード
 
+    /// 今の1つ。取りかかる操作（始める・5分だけ）だけを大きくし、完了は名前の横の丸、
+    /// 見送りは控えめな文字、ほかの操作は右上の「…」にまとめる（並んだボタンで迷わせないため）
     private func recommendationCard(
         _ recommendation: TaskRecommendation
     ) -> some View {
         let task = recommendation.task
 
-        return VStack(alignment: .leading, spacing: 14) {
-            Label("今はこれ", systemImage: "sparkles")
-                .font(.subheadline)
-                .fontWeight(.semibold)
-                .foregroundStyle(.blue)
-
-            VStack(alignment: .leading, spacing: 6) {
-                // 一歩なら、どのタスクの何歩目かを小さく添える（タイトルには入れない）
-                if let position = viewModel.stepPosition(of: task) {
-                    // 何歩目かは必ず見えるように先に置き、長い元のタスク名だけを省略する
-                    HStack(spacing: 6) {
-                        Text("\(position.index)歩目")
-                            .fontWeight(.semibold)
-                            .foregroundStyle(.blue)
-
-                        Text(CompletionMessages.baseTitle(of: position.parentTitle))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                    }
-                    .font(.footnote)
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("「\(CompletionMessages.baseTitle(of: position.parentTitle))」の\(position.index)歩目")
-                } else if let progress = stepProgressText(for: task) {
-                    Text(progress)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
+        return VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top, spacing: 12) {
+                completeCheck(for: task)
 
                 Text(task.title)
                     .font(.title2)
                     .fontWeight(.semibold)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityIdentifier("recommendationTitle")
 
-                Text(details(for: task))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                cardMenu(for: task)
             }
 
-            Text(recommendation.reason)
-                .font(.body)
+            cardPills(for: recommendation)
 
-            // 取りかかる2つは並べ、ほかの操作は控えめにまとめる（「開いて1つ分かる」を崩さないため）
+            if isShowingFullReason {
+                Text(recommendation.reason)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .transition(.opacity)
+            }
+
             HStack(spacing: 10) {
                 Button {
                     beginFocus()
@@ -406,49 +423,26 @@ struct ContentView: View {
             }
             .controlSize(.large)
 
-            HStack(spacing: 10) {
-                Button {
-                    viewModel.completeRecommendation()
-                } label: {
-                    Label("完了", systemImage: "checkmark")
-                        .frame(maxWidth: .infinity)
-                }
-                .keyboardShortcut("d", modifiers: .command)
-                .accessibilityIdentifier("completeButton")
-
-                Button {
+            // 見送っても責めない。どうなるか（1時間後にまた出る）を先に見せておく
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
                     viewModel.skipRecommendation()
-                } label: {
-                    Text("今はやらない")
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                        .frame(maxWidth: .infinity)
                 }
-                .keyboardShortcut("l", modifiers: .command)
-
-                Menu {
-                    Button {
-                        firstStepTask = task
-                    } label: {
-                        Label(stepsButtonTitle(for: task), systemImage: "shoeprints.fill")
-                    }
-
-                    // くり返しの回は、その回だけ休める
-                    if task.recurringID != nil {
-                        Button {
-                            viewModel.skipOccurrence(task)
-                        } label: {
-                            Label("今回はお休み", systemImage: "moon.zzz")
-                        }
-                    }
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .frame(minWidth: 24, minHeight: 20)
+            } label: {
+                VStack(spacing: 2) {
+                    Text("あとで")
+                        .font(.subheadline)
+                    Text("1時間後にまた出します")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
                 }
-                .accessibilityLabel("ほかの操作")
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
             }
-            .buttonStyle(.bordered)
-            .controlSize(.large)
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .keyboardShortcut("l", modifiers: .command)
+            .accessibilityIdentifier("skipButton")
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -460,9 +454,116 @@ struct ContentView: View {
         }
     }
 
-    /// 所要時間。優先度は選び方と理由文には効いているので、ここには出さない（見ても取りかかる気持ちにはつながらないため）
-    private func details(for task: TaskItem) -> String {
-        "所要時間 \(task.estimatedMinutes)分"
+    /// 名前の横の丸。押すと完了（「元に戻す」がすぐ出るので、確かめはしない）
+    private func completeCheck(for task: TaskItem) -> some View {
+        Button {
+            viewModel.completeRecommendation()
+        } label: {
+            Image(systemName: "circle")
+                .font(.system(size: 28, weight: .light))
+                .foregroundStyle(.secondary)
+                .frame(width: 32, height: 32)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .padding(.top, 1)
+        .keyboardShortcut("d", modifiers: .command)
+        .accessibilityLabel("完了にする")
+        .accessibilityIdentifier("completeButton")
+    }
+
+    /// 右上の「…」。めったに使わない操作をまとめる
+    private func cardMenu(for task: TaskItem) -> some View {
+        Menu {
+            Button {
+                firstStepTask = task
+            } label: {
+                Label(stepsButtonTitle(for: task), systemImage: "shoeprints.fill")
+            }
+
+            // くり返しの回は、その回だけ休める
+            if task.recurringID != nil {
+                Button {
+                    viewModel.skipOccurrence(task)
+                } label: {
+                    Label("今回はお休み", systemImage: "moon.zzz")
+                }
+            }
+
+            Button {
+                editingTaskID = task.id
+            } label: {
+                Label("編集", systemImage: "pencil")
+            }
+
+            Divider()
+
+            Button(role: .destructive) {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    viewModel.deleteTask(task)
+                }
+            } label: {
+                Label("削除", systemImage: "trash")
+            }
+            .accessibilityIdentifier("deleteFromCardButton")
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 32, height: 32)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel("ほかの操作")
+        .accessibilityIdentifier("cardMenu")
+    }
+
+    /// 所要時間・何歩目・決め手を、短い札で並べる。決め手の札を押すと、理由の全文が出る
+    private func cardPills(for recommendation: TaskRecommendation) -> some View {
+        let task = recommendation.task
+
+        return HStack(spacing: 6) {
+            pill("\(task.estimatedMinutes)分", systemImage: "clock")
+
+            if let position = viewModel.stepPosition(of: task) {
+                pill("\(position.index)歩目", systemImage: "shoeprints.fill")
+                    .accessibilityLabel("「\(CompletionMessages.baseTitle(of: position.parentTitle))」の\(position.index)歩目")
+            } else if let progress = stepCountText(for: task) {
+                pill(progress, systemImage: "shoeprints.fill")
+            }
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isShowingFullReason.toggle()
+                }
+            } label: {
+                pill(recommendation.shortReason, systemImage: "sparkles", tint: .blue)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(recommendation.reason)
+            .accessibilityHint(isShowingFullReason ? "理由を閉じます" : "理由をくわしく見ます")
+        }
+        .lineLimit(1)
+    }
+
+    private func pill(_ text: String, systemImage: String, tint: Color = .secondary) -> some View {
+        Label(text, systemImage: systemImage)
+            .font(.footnote)
+            .labelStyle(PillLabelStyle())
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4)
+            .foregroundStyle(tint)
+            .background(tint.opacity(0.12), in: Capsule())
+    }
+
+    /// 札のなかの絵と文字を、詰めて並べる
+    private struct PillLabelStyle: LabelStyle {
+        func makeBody(configuration: Configuration) -> some View {
+            HStack(spacing: 3) {
+                configuration.icon
+                    .imageScale(.small)
+                configuration.title
+            }
+        }
     }
 
     /// 推薦できるタスクがないときに、その内訳と次の一手を示す
@@ -644,11 +745,62 @@ struct ContentView: View {
 
     // MARK: - 下部の入力欄
 
+    /// 真ん中下の大きな＋。押すと、1行で書く入力欄が開く
+    private var addButton: some View {
+        Button {
+            isQuickAddOpen = true
+            isQuickAddFocused = true
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 26, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 64, height: 64)
+                .background(.blue, in: Circle())
+                .shadow(color: .black.opacity(0.18), radius: 8, y: 4)
+        }
+        .buttonStyle(.plain)
+        .keyboardShortcut("n", modifiers: .command)
+        .accessibilityLabel("タスクを追加")
+        .accessibilityIdentifier("addButton")
+    }
+
     private var quickAddBar: some View {
         VStack(alignment: .leading, spacing: 8) {
             quickAddChips
 
             quickAddField
+        }
+    }
+
+    /// 完了・削除・あとでの直後に出す、取り消しの知らせ（いちばん新しいものだけ）
+    @ViewBuilder
+    private var bottomBanner: some View {
+        if let deleted = viewModel.lastDeleted {
+            banner(
+                "「\(deleted.main.title)」を削除しました",
+                actionTitle: "元に戻す",
+                identifier: "undoDeleteButton"
+            ) {
+                viewModel.undoDelete()
+            }
+        } else if let completed = viewModel.lastCompletedTask {
+            banner(
+                "「\(completed.title)」を完了しました",
+                actionTitle: "元に戻す",
+                identifier: "undoButton"
+            ) {
+                viewModel.undoLastCompletion()
+            }
+        } else if viewModel.lastSkippedTask != nil {
+            banner(
+                "あとでにしました。1時間後にまた出します",
+                actionTitle: "やっぱり今やる",
+                identifier: "undoSkipButton"
+            ) {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    viewModel.undoSkip()
+                }
+            }
         }
     }
 
@@ -659,7 +811,7 @@ struct ContentView: View {
             let when = full.deadline.map { ("期限 " + viewModel.describeQuickAddDate($0, includesTime: full.includesTime), "flag") }
                 ?? full.scheduledDate.map { (viewModel.describeQuickAddDate($0, includesTime: full.includesTime), "calendar") }
 
-            if when != nil || full.durationWasWritten || full.isLight || full.recurrence != nil {
+            if when != nil || full.durationWasWritten || full.isLight || full.recurrence != nil || full.unrenamedTitle != nil {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         if let when {
@@ -676,6 +828,10 @@ struct ContentView: View {
 
                         if let recurrence = full.recurrence {
                             quickAddChip(recurrence.summary, systemImage: "repeat", part: .repeat)
+                        }
+
+                        if full.unrenamedTitle != nil {
+                            quickAddChip("「\(full.title)」にする", systemImage: "wand.and.stars", part: .rename)
                         }
                     }
                 }
@@ -718,12 +874,21 @@ struct ContentView: View {
             Image(systemName: "plus.circle.fill")
                 .foregroundStyle(.secondary)
 
-            TextField("タスクを追加（例：請求書を送る 15分）", text: $quickAddText)
+            TextField("思いついたまま書く（例：明日までに請求書送らないと）", text: $quickAddText)
                 .submitLabel(.done)
+                .focused($isQuickAddFocused)
                 .onSubmit(submitQuickAdd)
                 .accessibilityIdentifier("quickAddField")
 
-            if !quickAddText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if quickAddText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                // 日付や優先度を自分で選びたいときの入り口
+                Button("詳しく") {
+                    isQuickAddFocused = false
+                    isShowingAddTask = true
+                }
+                .font(.subheadline)
+                .accessibilityIdentifier("detailedAddButton")
+            } else {
                 Button("追加", action: submitQuickAdd)
                     .fontWeight(.semibold)
             }
@@ -731,6 +896,8 @@ struct ContentView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .background(.regularMaterial, in: Capsule())
+        // 後ろのカードと溶け合わないよう、少し浮かせる
+        .shadow(color: .black.opacity(0.12), radius: 10, y: 3)
     }
 
     private func submitQuickAdd() {
@@ -740,20 +907,24 @@ struct ContentView: View {
         }
     }
 
-    private func undoBanner(for task: TaskItem) -> some View {
+    private func banner(
+        _ message: String,
+        actionTitle: String,
+        identifier: String,
+        action: @escaping () -> Void
+    ) -> some View {
         HStack(spacing: 12) {
-            Text("「\(task.title)」を完了しました")
+            Text(message)
                 .font(.subheadline)
                 .lineLimit(1)
+                .minimumScaleFactor(0.85)
 
-            Spacer()
+            Spacer(minLength: 0)
 
-            Button("元に戻す") {
-                viewModel.undoLastCompletion()
-            }
-            .accessibilityIdentifier("undoButton")
-            .font(.subheadline)
-            .fontWeight(.semibold)
+            Button(actionTitle, action: action)
+                .accessibilityIdentifier(identifier)
+                .font(.subheadline)
+                .fontWeight(.semibold)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -826,6 +997,9 @@ struct ContentView: View {
             },
             onAddFirstStep: { title, minutes in
                 viewModel.addFirstStep(for: task, title: title, minutes: minutes)
+            },
+            onDelete: {
+                viewModel.deleteTask(task)
             }
         )
     }
@@ -868,6 +1042,15 @@ struct ContentView: View {
             return nil
         }
         return "一歩ずつ・\(steps.filter(\.isCompleted).count)/\(steps.count) 済み"
+    }
+
+    /// 札に出す短い進み具合。「2/3歩」
+    private func stepCountText(for task: TaskItem) -> String? {
+        let steps = viewModel.steps(of: task.id)
+        guard !steps.isEmpty else {
+            return nil
+        }
+        return "\(steps.filter(\.isCompleted).count)/\(steps.count)歩"
     }
 
     /// 「5分だけやる」「最初の一歩を決める」。全部やる気になれなくても、手をつけられるようにする

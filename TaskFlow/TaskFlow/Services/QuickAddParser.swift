@@ -13,6 +13,7 @@ import Foundation
 /// 「まで」「までに」が付けば期限、なければ予定日。所要時間は末尾だけを読み、5〜480分・5分単位に切り上げる。
 /// 「軽」「軽い」「（軽）」を単語として書くと、頭を使わない軽い作業の印になる（例：「メール整理 軽 10分」）。
 /// 「毎日」「毎週月曜」「毎週月・木」「毎月20日」「3日ごと」と書くと、くり返すタスクになる（例：「毎週月曜にゴミ出し 5分」）。
+/// 「〜しないと」「〜しなきゃ」のような書き方は、タスクらしい名前に整える（`TitleNormalizer`）。
 nonisolated enum QuickAddParser {
 
     /// 読み取る項目。読み取り結果の表示でタップすると、その項目を外せる
@@ -21,6 +22,9 @@ nonisolated enum QuickAddParser {
         case duration
         case light
         case `repeat`
+
+        /// 書いた文をタスクらしい名前に整えること（「送らないと」→「送る」など）
+        case rename
     }
 
     struct Result: Equatable {
@@ -40,6 +44,9 @@ nonisolated enum QuickAddParser {
 
         /// くり返しが書かれていたら、そのきまり
         var recurrence: Recurrence? = nil
+
+        /// 名前を整えたとき、整える前の名前（整えなかったらnil）
+        var unrenamedTitle: String? = nil
     }
 
     static let minuteRange = 5...480
@@ -150,6 +157,14 @@ nonisolated enum QuickAddParser {
         }
 
         result.title = title
+
+        if !ignoring.contains(.rename) {
+            let renamed = TitleNormalizer.normalize(title)
+            if renamed != title {
+                result.title = renamed
+                result.unrenamedTitle = title
+            }
+        }
         return result
     }
 

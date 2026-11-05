@@ -9,6 +9,7 @@ struct EditTaskView: View {
     let onSplit: ([TaskSplitPart]) -> Void
     let onLowerPriority: (UUID) -> Void
     let onAddFirstStep: (String, Int) -> Void
+    let onDelete: (() -> Void)?
 
     /// 前提として選べるタスク（自分自身と、循環するものを除く）
     private let selectablePrerequisites: [TaskItem]
@@ -33,6 +34,8 @@ struct EditTaskView: View {
     /// 分け方が決まったら、シートが閉じたあとに反映する
     @State private var pendingSplit: [TaskSplitPart]?
 
+    @State private var isConfirmingDelete = false
+
     /// - Parameters:
     ///   - allTasks: 前提タスクの候補を選ぶための全タスク
     ///   - onSplit: 「小さく分ける」で分け方が決まったときに呼ばれる
@@ -42,13 +45,15 @@ struct EditTaskView: View {
         onSave: @escaping (TaskItem) -> Void = { _ in },
         onSplit: @escaping ([TaskSplitPart]) -> Void = { _ in },
         onLowerPriority: @escaping (UUID) -> Void = { _ in },
-        onAddFirstStep: @escaping (String, Int) -> Void = { _, _ in }
+        onAddFirstStep: @escaping (String, Int) -> Void = { _, _ in },
+        onDelete: (() -> Void)? = nil
     ) {
         self.task = task
         self.onSave = onSave
         self.onSplit = onSplit
         self.onLowerPriority = onLowerPriority
         self.onAddFirstStep = onAddFirstStep
+        self.onDelete = onDelete
         self.selectablePrerequisites = PrerequisiteRules.selectablePrerequisites(
             for: task,
             in: allTasks
@@ -187,8 +192,29 @@ struct EditTaskView: View {
                     Text("全部を分けるのが面倒なら、最初の一歩だけ決めれば大丈夫です。全体を順番に分けたいときは「小さく分ける」。")
                 }
             }
+
+            if onDelete != nil {
+                Section {
+                    Button("このタスクを削除", role: .destructive) {
+                        isConfirmingDelete = true
+                    }
+                    .accessibilityIdentifier("deleteTaskButton")
+                }
+            }
         }
         .navigationTitle("タスク編集")
+        .confirmationDialog(
+            "「\(task.title)」を削除しますか？",
+            isPresented: $isConfirmingDelete,
+            titleVisibility: .visible
+        ) {
+            Button("削除", role: .destructive) {
+                onDelete?()
+                dismiss()
+            }
+        } message: {
+            Text("一歩があれば、一緒に消えます。")
+        }
         .sheet(isPresented: $isShowingFirstStep) {
             FirstStepView(task: task) { title, minutes in
                 onAddFirstStep(title, minutes)

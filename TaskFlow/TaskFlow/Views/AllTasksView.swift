@@ -70,6 +70,9 @@ struct AllTasksView: View {
                     onLowerPriority: onLowerPriority,
                     onAddFirstStep: { title, minutes in
                         onAddFirstStep(task, title, minutes)
+                    },
+                    onDelete: {
+                        onDelete(task)
                     }
                 )
             } label: {
