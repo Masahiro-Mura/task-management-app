@@ -112,7 +112,7 @@ struct StepsView: View {
                 }
             }
             .environment(\.editMode, $editMode)
-            .navigationTitle(parent.map { CompletionMessages.baseTitle(of: $0.title) } ?? "一歩")
+            .navigationTitle(parent.map { CompletionMessages.baseTitle(of: $0.title) } ?? String(localized: "一歩"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

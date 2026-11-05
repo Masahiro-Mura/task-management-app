@@ -9,6 +9,10 @@ struct SettingsView: View {
     @State private var isImporting = false
     @State private var importMessage: String?
 
+    /// 言語の選択（nil は端末の設定に合わせる）。起動したときの言語と違えば「開き直すと切り替わります」を出す
+    @State private var language = AppLanguage.selected()
+    private let launchLanguage = AppLanguage.current
+
     private var appVersion: String {
         let info = Bundle.main.infoDictionary
         let version = info?["CFBundleShortVersionString"] as? String ?? "-"
@@ -106,7 +110,7 @@ struct SettingsView: View {
                 if let ratio = viewModel.estimateRatio {
                     LabeledContent(
                         "見積もりと実際",
-                        value: String(format: "だいたい %.1f 倍", ratio)
+                        value: String(localized: "だいたい \(ratio.formatted(.number.precision(.fractionLength(1)))) 倍")
                     )
                 }
             } header: {
@@ -124,15 +128,15 @@ struct SettingsView: View {
             Section {
                 NavigationLink {
                     TaskArchiveListView(
-                        title: "保管したタスク",
-                        emptyMessage: "保管したタスクはありません",
+                        title: String(localized: "保管したタスク"),
+                        emptyMessage: String(localized: "保管したタスクはありません"),
                         tasks: viewModel.archivedTasks,
-                        restoreTitle: "戻す",
+                        restoreTitle: String(localized: "戻す"),
                         onRestore: { viewModel.restoreArchived($0) },
                         onDelete: { viewModel.deleteArchived($0) }
                     )
                 } label: {
-                    LabeledContent("保管したタスク", value: "\(viewModel.archivedTasks.count)件")
+                    LabeledContent("保管したタスク", value: String(localized: "\(viewModel.archivedTasks.count)件"))
                 }
             } header: {
                 Text("片づけ")
@@ -157,6 +161,37 @@ struct SettingsView: View {
                 Text("データ")
             } footer: {
                 Text("書き出したファイルは、機種変更やもしものときの控えに使えます。読み込みでは、今あるタスクは消さず、まだないものだけを足します。")
+            }
+
+            Section {
+                Picker(
+                    "言語",
+                    selection: Binding(
+                        get: { language },
+                        set: { newValue in
+                            language = newValue
+                            AppLanguage.select(newValue)
+                        }
+                    )
+                ) {
+                    Text("端末の設定に合わせる")
+                        .tag(AppLanguage?.none)
+
+                    ForEach(AppLanguage.allCases) { option in
+                        Text(verbatim: option.nativeName)
+                            .tag(Optional(option))
+                    }
+                }
+                .accessibilityIdentifier("languagePicker")
+            } header: {
+                Text("言語")
+            } footer: {
+                if languageWillChange {
+                    Text("TaskFlow を閉じて開き直すと、言語が切り替わります。")
+                        .foregroundStyle(.orange)
+                } else {
+                    Text("1行入力の日付や時刻の読み取り（「明日の15時に」など）は、いまは日本語だけに対応しています。所要時間（「15分」「15m」「1h」）はどの言語でも読み取れます。")
+                }
             }
 
             Section {
@@ -186,6 +221,16 @@ struct SettingsView: View {
         }
     }
 
+    /// 選んだ言語が、今表示している言語と違うか
+    private var languageWillChange: Bool {
+        guard let language else {
+            // 端末の設定に戻したときは、端末の言語と今の言語が違えば切り替わる
+            let system = Locale.preferredLanguages.first ?? ""
+            return launchLanguage.map { !system.hasPrefix($0.rawValue) } ?? false
+        }
+        return language != launchLanguage
+    }
+
     /// 選んだファイルを読み込んで、結果の文を返す
     private static func importBackup(
         _ result: Result<URL, Error>,
@@ -202,10 +247,10 @@ struct SettingsView: View {
 
             let summary = try viewModel.importBackup(Data(contentsOf: url))
             return summary.total == 0
-                ? "新しく足すものはありませんでした。"
-                : "タスク\(summary.addedTasks)件、くり返し\(summary.addedRecurringTasks)件、保管\(summary.addedArchivedTasks)件を足しました。"
+                ? String(localized: "新しく足すものはありませんでした。")
+                : String(localized: "タスク\(summary.addedTasks)件、くり返し\(summary.addedRecurringTasks)件、保管\(summary.addedArchivedTasks)件を足しました。")
         } catch {
-            return (error as? LocalizedError)?.errorDescription ?? "読み込めませんでした。"
+            return (error as? LocalizedError)?.errorDescription ?? String(localized: "読み込めませんでした。")
         }
     }
 

@@ -14,11 +14,11 @@ struct RecurrenceSection: View {
 
         var title: String {
             switch self {
-            case .none: return "なし"
-            case .daily: return "毎日"
-            case .weekly: return "毎週"
-            case .monthly: return "毎月"
-            case .everyNDays: return "◯日ごと"
+            case .none: return String(localized: "なし")
+            case .daily: return String(localized: "毎日")
+            case .weekly: return String(localized: "毎週")
+            case .monthly: return String(localized: "毎月")
+            case .everyNDays: return String(localized: "◯日ごと")
             }
         }
     }
@@ -134,7 +134,7 @@ struct RecurrenceSection: View {
                         .background(isOn ? Color.accentColor : Color.secondary.opacity(0.12), in: Circle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("\(Recurrence.weekdaySymbols[weekday - 1])曜")
+                .accessibilityLabel(Recurrence.weekdayNames[weekday - 1])
                 .accessibilityAddTraits(isOn ? .isSelected : [])
             }
         }

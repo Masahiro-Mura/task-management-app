@@ -17,20 +17,20 @@ struct OnboardingView: View {
     private let pages: [Page] = [
         Page(
             systemImage: "sparkles",
-            title: "開いたら、今やる1つ",
-            body: "空き時間・期限・優先度から、今やるタスクを1件だけ選びます。なぜそれなのか、理由も添えます。",
+            title: String(localized: "開いたら、今やる1つ"),
+            body: String(localized: "空き時間・期限・優先度から、今やるタスクを1件だけ選びます。なぜそれなのか、理由も添えます。"),
             example: nil
         ),
         Page(
             systemImage: "text.cursor",
-            title: "1行で入れるだけ",
-            body: "日付・時間・くり返しは、書いたとおりに読み取ります。",
-            example: "明日の15時に資料作成 30分\n金曜までにレポート 2時間\n毎週月曜にゴミ出し 5分"
+            title: String(localized: "1行で入れるだけ"),
+            body: String(localized: "日付・時間・くり返しは、書いたとおりに読み取ります。"),
+            example: String(localized: "明日の15時に資料作成 30分\n金曜までにレポート 2時間\n毎週月曜にゴミ出し 5分")
         ),
         Page(
             systemImage: "leaf",
-            title: "できなかった日も、責めません",
-            body: "やり残しは静かに持ち越し、放っておいたものは冬眠します。気が乗らない日は、軽いものだけにもできます。",
+            title: String(localized: "できなかった日も、責めません"),
+            body: String(localized: "やり残しは静かに持ち越し、放っておいたものは冬眠します。気が乗らない日は、軽いものだけにもできます。"),
             example: nil
         )
     ]

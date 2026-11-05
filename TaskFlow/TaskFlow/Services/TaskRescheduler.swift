@@ -13,15 +13,15 @@ enum TaskRescheduler {
         var title: String {
             switch self {
             case .today:
-                return "今日に"
+                return String(localized: "今日に")
             case .tomorrow:
-                return "明日に"
+                return String(localized: "明日に")
             case .nextMonday:
-                return "来週月曜に"
+                return String(localized: "来週月曜に")
             case .clearDates:
-                return "日付を外す（いつかやる）"
+                return String(localized: "日付を外す（いつかやる）")
             case .hibernate:
-                return "冬眠させる"
+                return String(localized: "冬眠させる")
             }
         }
     }

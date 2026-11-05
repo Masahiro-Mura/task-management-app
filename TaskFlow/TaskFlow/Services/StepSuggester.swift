@@ -42,28 +42,68 @@ nonisolated enum StepSuggester {
 
     /// タスク名の言葉から選ぶ、決まった型の候補
     static func templateSuggestions(for title: String) -> [String] {
+        // 言葉はタスク名に含まれるかで調べる（日本語と英語）。候補は使っている言語で出す
         let templates: [(keywords: [String], steps: [String])] = [
-            (["片付", "片づ", "掃除", "整理", "部屋"], ["机の上だけ片づける", "床に落ちている物を拾う", "ゴミをひとまとめにする"]),
-            (["資料", "レポート", "企画", "書く", "文章", "論文", "報告"], ["タイトルと見出しだけ書く", "入れたいことを3つメモする", "最初の1段落だけ書く"]),
-            (["メール", "連絡", "返信", "電話"], ["送る相手を1人決める", "件名だけ書く", "要点を3行で書く"]),
-            (["勉強", "読む", "読書", "復習", "予習"], ["目次をざっと見る", "5ページだけ読む", "問題を1問だけ解く"]),
-            (["準備", "支度", "荷造り", "用意"], ["必要な物を書き出す", "1つだけ用意する", "置き場所を決める"]),
-            (["買い物", "買う", "注文"], ["買う物を3つ書き出す", "1つだけ値段を調べる", "店かサイトを決める"]),
-            (["申請", "手続き", "書類", "提出"], ["必要な書類を確認する", "名前と日付だけ書く", "提出先を調べる"])
+            (["片付", "片づ", "掃除", "整理", "部屋", "clean", "tidy", "room"], [
+                String(localized: "机の上だけ片づける"),
+                String(localized: "床に落ちている物を拾う"),
+                String(localized: "ゴミをひとまとめにする")
+            ]),
+            (["資料", "レポート", "企画", "書く", "文章", "論文", "報告", "write", "report", "draft", "essay"], [
+                String(localized: "タイトルと見出しだけ書く"),
+                String(localized: "入れたいことを3つメモする"),
+                String(localized: "最初の1段落だけ書く")
+            ]),
+            (["メール", "連絡", "返信", "電話", "mail", "reply", "call", "message"], [
+                String(localized: "送る相手を1人決める"),
+                String(localized: "件名だけ書く"),
+                String(localized: "要点を3行で書く")
+            ]),
+            (["勉強", "読む", "読書", "復習", "予習", "study", "read", "learn", "review"], [
+                String(localized: "目次をざっと見る"),
+                String(localized: "5ページだけ読む"),
+                String(localized: "問題を1問だけ解く")
+            ]),
+            (["準備", "支度", "荷造り", "用意", "prepare", "pack"], [
+                String(localized: "必要な物を書き出す"),
+                String(localized: "1つだけ用意する"),
+                String(localized: "置き場所を決める")
+            ]),
+            (["買い物", "買う", "注文", "buy", "shop", "order"], [
+                String(localized: "買う物を3つ書き出す"),
+                String(localized: "1つだけ値段を調べる"),
+                String(localized: "店かサイトを決める")
+            ]),
+            (["申請", "手続き", "書類", "提出", "apply", "form", "submit"], [
+                String(localized: "必要な書類を確認する"),
+                String(localized: "名前と日付だけ書く"),
+                String(localized: "提出先を調べる")
+            ])
         ]
 
-        for template in templates where template.keywords.contains(where: { title.contains($0) }) {
+        let lowercased = title.lowercased()
+        for template in templates where template.keywords.contains(where: { lowercased.contains($0) }) {
             return template.steps
         }
 
-        return ["やることを3つ書き出す", "必要な物を1つ集める", "5分だけ手をつけてみる"]
+        return [
+            String(localized: "やることを3つ書き出す"),
+            String(localized: "必要な物を1つ集める"),
+            String(localized: "5分だけ手をつけてみる")
+        ]
     }
 
     #if canImport(FoundationModels)
     @Generable
     struct StepIdeas {
-        @Guide(description: "最初の5分でできる、具体的で小さな作業。日本語で、それぞれ20文字以内。動詞で終える。")
+        @Guide(description: "最初の5分でできる、具体的で小さな作業。指示された言語で、短く。動詞で終える。")
         var steps: [String]
+    }
+
+    /// 候補を書く言語の名前（アプリを使っている言語。例：日本語、English）
+    private static var answerLanguage: String {
+        let code = Locale.current.language.languageCode?.identifier ?? "ja"
+        return Locale(identifier: code).localizedString(forLanguageCode: code) ?? code
     }
 
     private static func generateWithAI(for title: String) async throws -> [String] {
@@ -71,6 +111,7 @@ nonisolated enum StepSuggester {
             instructions: """
             あなたは、先延ばししがちな人がタスクに取りかかれるよう、最初の小さな一歩を提案します。
             責めたり急かしたりせず、5分以内にできる具体的な作業だけを出してください。
+            答えは \(answerLanguage) で書いてください。
             """
         )
 

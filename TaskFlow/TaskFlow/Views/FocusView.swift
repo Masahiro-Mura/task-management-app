@@ -68,13 +68,13 @@ struct FocusView: View {
     private func statusText(reachedTarget: Bool) -> String {
         switch (trialMinutes, reachedTarget) {
         case (nil, false):
-            return "目安 \(targetMinutes)分"
+            return String(localized: "目安 \(targetMinutes)分")
         case (nil, true):
-            return "目安の\(targetMinutes)分を過ぎました。区切りのいいところで終えて大丈夫です"
+            return String(localized: "目安の\(targetMinutes)分を過ぎました。区切りのいいところで終えて大丈夫です")
         case (_?, false):
-            return "\(targetMinutes)分たったら、続けるかどうか選べます"
+            return String(localized: "\(targetMinutes)分たったら、続けるかどうか選べます")
         case (_?, true):
-            return "\(targetMinutes)分、手をつけられました。続けますか？"
+            return String(localized: "\(targetMinutes)分、手をつけられました。続けますか？")
         }
     }
 

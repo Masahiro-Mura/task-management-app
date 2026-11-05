@@ -66,6 +66,6 @@ nonisolated enum ShareInbox {
         guard !title.isEmpty else {
             return ""
         }
-        return url == nil ? title : "「\(title)」を読む"
+        return url == nil ? title : String(localized: "「\(title)」を読む")
     }
 }

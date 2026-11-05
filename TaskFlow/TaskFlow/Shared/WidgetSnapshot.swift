@@ -56,7 +56,7 @@ nonisolated struct WidgetSnapshot: Codable, Equatable {
 
     /// ウィジェットのギャラリーやプレビューで出す見本
     static let placeholder = WidgetSnapshot(
-        pick: Pick(taskID: UUID(), title: "請求書を送る", minutes: 15, shortReason: "期限が近い"),
+        pick: Pick(taskID: UUID(), title: String(localized: "請求書を送る"), minutes: 15, shortReason: String(localized: "期限が近い")),
         emptyMessage: "",
         availableMinutes: 45,
         todayRemainingCount: 3,

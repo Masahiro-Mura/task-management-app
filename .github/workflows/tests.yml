@@ -31,6 +31,7 @@ jobs:
           echo "id=$id" >> "$GITHUB_OUTPUT"
           echo "使うシミュレータ: $id"
 
+      # テストは日本語の文言で確かめているので、日本語で動かす（ほかの言語は LocalizationTests で確かめる）
       - name: 単体テストとUIテスト
         run: |
           xcodebuild test \
@@ -38,4 +39,5 @@ jobs:
             -scheme TaskFlow \
             -destination "id=${{ steps.simulator.outputs.id }}" \
             -parallel-testing-enabled NO \
+            -testLanguage ja -testRegion JP \
             CODE_SIGNING_ALLOWED=NO

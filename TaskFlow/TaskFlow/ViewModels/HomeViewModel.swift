@@ -418,9 +418,9 @@ final class HomeViewModel: ObservableObject {
         isOnboardingRequested = false
 
         if addExamples {
-            quickAdd("メールを1通返す 10分")
-            quickAdd("明日までに企画のメモを書く 30分")
-            quickAdd("部屋の片付け 90分")
+            quickAdd(String(localized: "メールを1通返す 10分"))
+            quickAdd(String(localized: "明日までに企画のメモを書く 30分"))
+            quickAdd(String(localized: "部屋の片付け 90分"))
         }
 
         objectWillChange.send()
@@ -458,17 +458,17 @@ final class HomeViewModel: ObservableObject {
                 title: recommendation.task.title,
                 minutes: recommendation.task.estimatedMinutes,
                 shortReason: recommendation.shortReason,
-                stepLabel: stepPosition(of: recommendation.task).map { "\($0.index)歩目" }
+                stepLabel: stepPosition(of: recommendation.task).map { String(localized: "\($0.index)歩目") }
             )
         }
 
         let emptyMessage: String
         if tasks.allSatisfy(\.isCompleted) {
-            emptyMessage = "やることはありません"
+            emptyMessage = String(localized: "やることはありません")
         } else if lightModeHasNoMatch {
-            emptyMessage = "軽い作業はありません"
+            emptyMessage = String(localized: "軽い作業はありません")
         } else {
-            emptyMessage = "\(availableMinutes)分に入るものはありません"
+            emptyMessage = String(localized: "\(availableMinutes)分に入るものはありません")
         }
 
         let snapshot = WidgetSnapshot(
@@ -1172,10 +1172,10 @@ final class HomeViewModel: ObservableObject {
     private let focusShortcutStorageKey = "taskFlow.focus.shortcut"
 
     /// 集中を始めるときに動かすショートカットの名前（ユーザーが自分で作る）
-    nonisolated static let focusStartShortcutName = "TaskFlow 集中開始"
+    nonisolated static let focusStartShortcutName = String(localized: "TaskFlow 集中開始")
 
     /// 集中を終えるときに動かすショートカットの名前
-    nonisolated static let focusEndShortcutName = "TaskFlow 集中終了"
+    nonisolated static let focusEndShortcutName = String(localized: "TaskFlow 集中終了")
 
     func setUsesFocusShortcut(_ enabled: Bool) {
         usesFocusShortcut = enabled

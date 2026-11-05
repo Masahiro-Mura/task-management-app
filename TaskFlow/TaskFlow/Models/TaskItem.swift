@@ -8,11 +8,11 @@ enum TaskPriority: Int, Codable, CaseIterable {
     var displayName: String {
         switch self {
         case .low:
-            return "低"
+            return String(localized: "低")
         case .medium:
-            return "中"
+            return String(localized: "中")
         case .high:
-            return "高"
+            return String(localized: "高")
         }
     }
 }

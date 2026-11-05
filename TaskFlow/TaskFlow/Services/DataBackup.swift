@@ -45,9 +45,9 @@ enum BackupError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .unreadable:
-            return "TaskFlow の書き出しファイルとして読めませんでした。"
+            return String(localized: "TaskFlow の書き出しファイルとして読めませんでした。")
         case .newerVersion:
-            return "新しい版の TaskFlow で書き出したファイルです。アプリを更新してから読み込んでください。"
+            return String(localized: "新しい版の TaskFlow で書き出したファイルです。アプリを更新してから読み込んでください。")
         }
     }
 }

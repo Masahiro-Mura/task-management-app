@@ -63,9 +63,9 @@ struct DoneTodayView: View {
         let rest = minutes % 60
 
         if hours == 0 {
-            return "\(rest)分"
+            return String(localized: "\(rest)分")
         }
-        return rest == 0 ? "\(hours)時間" : "\(hours)時間\(rest)分"
+        return rest == 0 ? String(localized: "\(hours)時間") : String(localized: "\(hours)時間\(rest)分")
     }
 }
 

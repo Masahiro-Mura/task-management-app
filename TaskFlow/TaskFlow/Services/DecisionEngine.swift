@@ -304,20 +304,31 @@ struct DecisionEngine {
 
         // 期限切れは責めず、今なら片づけられることを伝える
         if let deadline = task.deadline, deadline <= context.currentDate {
-            return "期限は過ぎていますが、所要時間\(task.estimatedMinutes)分が空き時間\(context.availableMinutes)分に収まるので、今なら片づけられます。"
+            return String(
+                localized: "reason.overdue",
+                defaultValue: "期限は過ぎていますが、所要時間\(task.estimatedMinutes)分が空き時間\(context.availableMinutes)分に収まるので、今なら片づけられます。",
+                comment: "期限切れのタスクの推薦理由。責めずに、今なら片づけられることを伝える"
+            )
         }
-
-        let fit = "所要時間\(task.estimatedMinutes)分が空き時間\(context.availableMinutes)分に収まるからです。"
 
         guard let lead = leadPhrase(
             for: task,
             factor: factor,
             context: context
         ) else {
-            return fit
+            return String(
+                localized: "reason.fitOnly",
+                defaultValue: "所要時間\(task.estimatedMinutes)分が空き時間\(context.availableMinutes)分に収まるからです。",
+                comment: "決め手がないときの推薦理由（所要時間と空き時間）"
+            )
         }
 
-        return lead + "、" + fit
+        // 言語によって語順が変わるので、つなぎ方ごと訳せるようにしておく
+        return String(
+            localized: "reason.leadAndFit",
+            defaultValue: "\(lead)、所要時間\(task.estimatedMinutes)分が空き時間\(context.availableMinutes)分に収まるからです。",
+            comment: "推薦理由。最初の %@ は決め手（例：期限が決まっていて）、数字は所要時間と空き時間（分）"
+        )
     }
 
     /// 決め手だけを短く言う。長い理由文と同じ順で決める
@@ -331,34 +342,34 @@ struct DecisionEngine {
 
         if let deadline = task.deadline {
             if deadline <= now {
-                return "今なら片づく"
+                return String(localized: "今なら片づく")
             }
             if isUrgent(task, now: now) {
-                return String(remainingTimePhrase(until: deadline, now: now).dropLast())
+                return remainingTimePhrase(until: deadline, now: now, short: true)
             }
         }
 
         if context.prefersLight {
-            return task.isLight ? "軽い作業" : "すぐ終わる"
+            return task.isLight ? String(localized: "軽い作業") : String(localized: "すぐ終わる")
         }
 
         switch factor {
         case .onlyCandidate:
-            return "今できるのはこれ"
+            return String(localized: "今できるのはこれ")
         case .urgentDeadline, .earlierDeadline:
-            return "期限が近い"
+            return String(localized: "期限が近い")
         case .hasDeadline:
-            return "期限あり"
+            return String(localized: "期限あり")
         case .higherPriority:
-            return "優先度\(task.priority.displayName)"
+            return String(localized: "優先度\(task.priority.displayName)")
         case .shorter:
-            return "すぐ終わる"
+            return String(localized: "すぐ終わる")
         case .pinnedToday:
-            return "今日やると決めた"
+            return String(localized: "今日やると決めた")
         case .lighter:
-            return "軽い作業"
+            return String(localized: "軽い作業")
         case .none:
-            return "時間に収まる"
+            return String(localized: "時間に収まる")
         }
     }
 
@@ -378,51 +389,56 @@ struct DecisionEngine {
         // 気が乗らないときは、軽さ・短さを一番に伝える
         if context.prefersLight {
             return task.isLight
-                ? "頭を使わずにできる軽い作業で"
-                : "\(task.estimatedMinutes)分で終わる短い作業で"
+                ? String(localized: "reason.lead.lightTask", defaultValue: "頭を使わずにできる軽い作業で")
+                : String(localized: "reason.lead.shortTask", defaultValue: "\(task.estimatedMinutes)分で終わる短い作業で")
         }
 
         switch factor {
         case .onlyCandidate:
-            return "今取りかかれるのはこのタスクだけで"
+            return String(localized: "reason.lead.onlyCandidate", defaultValue: "今取りかかれるのはこのタスクだけで")
 
         case .urgentDeadline:
             // 急ぎのタスクは上で処理済み
             return nil
 
         case .earlierDeadline:
-            return "ほかのタスクより期限が早く"
+            return String(localized: "reason.lead.earlierDeadline", defaultValue: "ほかのタスクより期限が早く")
 
         case .hasDeadline:
-            return "期限が決まっていて"
+            return String(localized: "reason.lead.hasDeadline", defaultValue: "期限が決まっていて")
 
         case .higherPriority:
-            return "優先度が「\(task.priority.displayName)」で"
+            return String(localized: "reason.lead.higherPriority", defaultValue: "優先度が「\(task.priority.displayName)」で")
 
         case .shorter:
-            return "ほかのタスクより短く"
+            return String(localized: "reason.lead.shorter", defaultValue: "ほかのタスクより短く")
 
         case .pinnedToday:
-            return "今日やりたいと決めていて"
+            return String(localized: "reason.lead.pinned", defaultValue: "今日やりたいと決めていて")
 
         case .lighter:
-            return "頭を使わずにできる軽い作業で"
+            return String(localized: "reason.lead.lightTask", defaultValue: "頭を使わずにできる軽い作業で")
 
         case .none:
             return nil
         }
     }
 
-    private func remainingTimePhrase(until deadline: Date, now: Date) -> String {
+    /// - Parameter short: カードの札に出す短い形（「期限まであと3時間」）。false なら理由文の頭（「期限まであと3時間で」）
+    private func remainingTimePhrase(until deadline: Date, now: Date, short: Bool = false) -> String {
         // 期限切れは makeReason で別の文にしているので、ここでは残り時間が正の場合だけを扱う
         let remaining = max(deadline.timeIntervalSince(now), 0)
 
         let minutes = Int((remaining / 60).rounded(.up))
         if minutes < 60 {
-            return "期限まであと\(minutes)分で"
+            return short
+                ? String(localized: "期限まであと\(minutes)分")
+                : String(localized: "reason.lead.minutesLeft", defaultValue: "期限まであと\(minutes)分で")
         }
 
         let hours = Int((remaining / 3600).rounded(.up))
-        return "期限まであと\(hours)時間で"
+        return short
+            ? String(localized: "期限まであと\(hours)時間")
+            : String(localized: "reason.lead.hoursLeft", defaultValue: "期限まであと\(hours)時間で")
     }
 }

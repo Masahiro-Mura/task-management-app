@@ -533,10 +533,10 @@ struct ContentView: View {
         let task = recommendation.task
 
         return HStack(spacing: 6) {
-            pill("\(task.estimatedMinutes)分", systemImage: "clock")
+            pill(String(localized: "\(task.estimatedMinutes)分"), systemImage: "clock")
 
             if let position = viewModel.stepPosition(of: task) {
-                pill("\(position.index)歩目", systemImage: "shoeprints.fill")
+                pill(String(localized: "\(position.index)歩目"), systemImage: "shoeprints.fill")
                     .accessibilityLabel("「\(CompletionMessages.baseTitle(of: position.parentTitle))」の\(position.index)歩目")
             } else if let progress = stepCountText(for: task) {
                 pill(progress, systemImage: "shoeprints.fill")
@@ -670,8 +670,8 @@ struct ContentView: View {
                         TaskRowView(
                             task: task,
                             note: viewModel.isCarriedOver(task)
-                                ? "持ち越し"
-                                : viewModel.pinnedTaskIDs.contains(task.id) ? "今日やりたい" : nil,
+                                ? String(localized: "持ち越し")
+                                : viewModel.pinnedTaskIDs.contains(task.id) ? String(localized: "今日やりたい") : nil,
                             onToggleCompletion: {
                                 viewModel.toggleCompletion(for: task)
                             }
@@ -788,24 +788,24 @@ struct ContentView: View {
     private var bottomBanner: some View {
         if let deleted = viewModel.lastDeleted {
             banner(
-                "「\(deleted.main.title)」を削除しました",
-                actionTitle: "元に戻す",
+                String(localized: "「\(deleted.main.title)」を削除しました"),
+                actionTitle: String(localized: "元に戻す"),
                 identifier: "undoDeleteButton"
             ) {
                 viewModel.undoDelete()
             }
         } else if let completed = viewModel.lastCompletedTask {
             banner(
-                "「\(completed.title)」を完了しました",
-                actionTitle: "元に戻す",
+                String(localized: "「\(completed.title)」を完了しました"),
+                actionTitle: String(localized: "元に戻す"),
                 identifier: "undoButton"
             ) {
                 viewModel.undoLastCompletion()
             }
         } else if viewModel.lastSkippedTask != nil {
             banner(
-                "あとでにしました。1時間後にまた出します",
-                actionTitle: "やっぱり今やる",
+                String(localized: "あとでにしました。1時間後にまた出します"),
+                actionTitle: String(localized: "やっぱり今やる"),
                 identifier: "undoSkipButton"
             ) {
                 withAnimation(.easeInOut(duration: 0.2)) {
@@ -819,7 +819,7 @@ struct ContentView: View {
     @ViewBuilder
     private var quickAddChips: some View {
         if let full = viewModel.previewQuickAdd(quickAddText) {
-            let when = full.deadline.map { ("期限 " + viewModel.describeQuickAddDate($0, includesTime: full.includesTime), "flag") }
+            let when = full.deadline.map { (String(localized: "期限 \(viewModel.describeQuickAddDate($0, includesTime: full.includesTime))"), "flag") }
                 ?? full.scheduledDate.map { (viewModel.describeQuickAddDate($0, includesTime: full.includesTime), "calendar") }
 
             if when != nil || full.durationWasWritten || full.isLight || full.recurrence != nil || full.unrenamedTitle != nil {
@@ -830,11 +830,11 @@ struct ContentView: View {
                         }
 
                         if full.durationWasWritten {
-                            quickAddChip("\(full.estimatedMinutes)分", systemImage: "clock", part: .duration)
+                            quickAddChip(String(localized: "\(full.estimatedMinutes)分"), systemImage: "clock", part: .duration)
                         }
 
                         if full.isLight {
-                            quickAddChip("軽い作業", systemImage: "leaf", part: .light)
+                            quickAddChip(String(localized: "軽い作業"), systemImage: "leaf", part: .light)
                         }
 
                         if let recurrence = full.recurrence {
@@ -842,7 +842,7 @@ struct ContentView: View {
                         }
 
                         if full.unrenamedTitle != nil {
-                            quickAddChip("「\(full.title)」にする", systemImage: "wand.and.stars", part: .rename)
+                            quickAddChip(String(localized: "「\(full.title)」にする"), systemImage: "wand.and.stars", part: .rename)
                         }
                     }
                 }
@@ -1066,9 +1066,9 @@ struct ContentView: View {
     /// 一歩がまだなければ「最初の一歩を決める」、あれば一覧を開く言葉にする
     private func stepsButtonTitle(for task: TaskItem) -> String {
         if task.parentTaskID != nil {
-            return "ほかの一歩を見る"
+            return String(localized: "ほかの一歩を見る")
         }
-        return viewModel.steps(of: task.id).isEmpty ? "最初の一歩を決める" : "一歩を見る"
+        return viewModel.steps(of: task.id).isEmpty ? String(localized: "最初の一歩を決める") : String(localized: "一歩を見る")
     }
 
     /// 一歩ずつ進めている元のタスクなら「一歩ずつ・2/3 済み」
@@ -1077,7 +1077,7 @@ struct ContentView: View {
         guard !steps.isEmpty else {
             return nil
         }
-        return "一歩ずつ・\(steps.filter(\.isCompleted).count)/\(steps.count) 済み"
+        return String(localized: "一歩ずつ・\(steps.filter(\.isCompleted).count)/\(steps.count) 済み")
     }
 
     /// 札に出す短い進み具合。「2/3歩」
@@ -1086,7 +1086,7 @@ struct ContentView: View {
         guard !steps.isEmpty else {
             return nil
         }
-        return "\(steps.filter(\.isCompleted).count)/\(steps.count)歩"
+        return String(localized: "\(steps.filter(\.isCompleted).count)/\(steps.count)歩")
     }
 
     /// 「5分だけやる」「最初の一歩を決める」。全部やる気になれなくても、手をつけられるようにする

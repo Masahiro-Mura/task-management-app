@@ -21,26 +21,40 @@ nonisolated struct Recurrence: Codable, Equatable, Hashable {
     /// やり残した回を次の日に持ち越すか。ゴミ出しのような習慣は持ち越さない（静かに流す）のが既定
     var carriesOver = false
 
-    static let weekdaySymbols = ["日", "月", "火", "水", "木", "金", "土"]
+    /// 曜日の短い表記（日曜はじまり）。使っている言語に合わせる（日本語なら「日」「月」…）
+    static var weekdaySymbols: [String] {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.locale = .current
+        return calendar.shortWeekdaySymbols
+    }
+
+    /// 曜日の読み上げ用の名前（日本語なら「日曜日」）
+    static var weekdayNames: [String] {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.locale = .current
+        return calendar.weekdaySymbols
+    }
 
     /// 「毎週 月・木」「毎月20日」「3日ごと」のような短い説明
     var summary: String {
         var text: String
         switch rule {
         case .daily:
-            text = "毎日"
+            text = String(localized: "毎日")
         case .weekly(let weekdays):
             // 月曜はじまりで並べる
             let ordered = weekdays.sorted { ($0 + 5) % 7 < ($1 + 5) % 7 }
-            text = "毎週 " + ordered.map { Self.weekdaySymbols[($0 - 1) % 7] }.joined(separator: "・")
+            let days = ordered.map { Self.weekdaySymbols[($0 - 1) % 7] }
+                .joined(separator: String(localized: "weekday.separator", defaultValue: "・", comment: "曜日を並べるときの区切り"))
+            text = String(localized: "毎週 \(days)")
         case .monthly(let day):
-            text = "毎月\(day)日"
+            text = String(localized: "毎月\(day)日")
         case .everyNDays(let n):
-            text = "\(n)日ごと"
+            text = String(localized: "\(n)日ごと")
         }
 
         if skipsHolidays {
-            text += "（祝日は休み）"
+            text = String(localized: "\(text)（祝日は休み）")
         }
         return text
     }

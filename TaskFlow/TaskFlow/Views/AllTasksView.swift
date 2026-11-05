@@ -32,15 +32,15 @@ struct AllTasksView: View {
 
     private func note(for task: TaskItem) -> String? {
         if dormantTaskIDs.contains(task.id) {
-            return "冬眠中（右へスワイプで起こす）"
+            return String(localized: "冬眠中（右へスワイプで起こす）")
         }
 
         if pinnedTaskIDs.contains(task.id) {
-            return "今日やりたい"
+            return String(localized: "今日やりたい")
         }
 
         if tomorrowTaskIDs.contains(task.id) {
-            return "明日"
+            return String(localized: "明日")
         }
 
         if let stepNote = stepNotes[task.id] {
@@ -48,7 +48,7 @@ struct AllTasksView: View {
         }
 
         if task.recurringID != nil {
-            return "くり返し"
+            return String(localized: "くり返し")
         }
 
         return nil
@@ -119,14 +119,14 @@ struct AllTasksView: View {
                 Section {
                     NavigationLink {
                         TaskArchiveListView(
-                            title: "完了済み",
-                            emptyMessage: "ありません",
+                            title: String(localized: "完了済み"),
+                            emptyMessage: String(localized: "ありません"),
                             tasks: hiddenCompletedTasks
                         )
                     } label: {
                         LabeledContent(
                             "完了して\(HomeViewModel.completedHideDays)日たったもの",
-                            value: "\(hiddenCompletedTasks.count)件"
+                            value: String(localized: "\(hiddenCompletedTasks.count)件")
                         )
                     }
                 }

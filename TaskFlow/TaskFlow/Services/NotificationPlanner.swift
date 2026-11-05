@@ -52,8 +52,8 @@ enum NotificationPlanner {
 
             return PlannedNotification(
                 id: idPrefix + "deadline." + task.id.uuidString,
-                title: "期限が近づいています",
-                body: "「\(task.title)」の期限まで、あと3時間です。\(task.estimatedMinutes)分あれば片づけられます。",
+                title: String(localized: "期限が近づいています"),
+                body: String(localized: "「\(task.title)」の期限まで、あと3時間です。\(task.estimatedMinutes)分あれば片づけられます。"),
                 fireDate: fireDate
             )
         }
@@ -78,9 +78,9 @@ enum NotificationPlanner {
     static func dailyPick(taskTitle: String?, fireDate: Date) -> PlannedNotification {
         PlannedNotification(
             id: idPrefix + "daily",
-            title: "今の1つ",
-            body: taskTitle.map { "「\($0)」から始めませんか。開くと、そのときの空き時間に合わせて選び直します。" }
-                ?? "今日の「今の1つ」を見てみませんか。",
+            title: String(localized: "今の1つ"),
+            body: taskTitle.map { String(localized: "「\($0)」から始めませんか。開くと、そのときの空き時間に合わせて選び直します。") }
+                ?? String(localized: "今日の「今の1つ」を見てみませんか。"),
             fireDate: fireDate
         )
     }

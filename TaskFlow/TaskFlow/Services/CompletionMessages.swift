@@ -13,14 +13,14 @@ enum CompletionMessages {
     ) -> String {
 
         if finishedGroup {
-            return "「\(baseTitle(of: task.title))」が全部終わりました"
+            return String(localized: "「\(baseTitle(of: task.title))」が全部終わりました")
         }
 
         let messages = [
-            "ひとつ片づきました",
-            "\(task.estimatedMinutes)分ぶん、前に進みました",
-            "いい区切りです",
-            "おつかれさまです"
+            String(localized: "ひとつ片づきました"),
+            String(localized: "\(task.estimatedMinutes)分ぶん、前に進みました"),
+            String(localized: "いい区切りです"),
+            String(localized: "おつかれさまです")
         ]
 
         return messages[abs(randomIndex) % messages.count]

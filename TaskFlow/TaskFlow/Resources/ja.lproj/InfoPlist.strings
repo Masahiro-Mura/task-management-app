@@ -1,6 +1,5 @@
 /*
-  TaskFlow は日本語のアプリです。
-  このファイルがあることで、アプリが日本語に対応していると iOS に伝わり、
-  標準のボタンや共有シートなど、システムの部品も日本語で表示されます。
+  アプリの元の言語（日本語）を iOS に伝えるためのファイル。
+  ほかの言語の画面の文言は Localizable.xcstrings、Siri の呼び方は AppShortcuts.xcstrings にある。
 */
 "CFBundleDisplayName" = "TaskFlow";

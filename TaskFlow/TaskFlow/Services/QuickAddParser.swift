@@ -188,16 +188,16 @@ nonisolated enum QuickAddParser {
         let dayText: String
         switch days {
         case 0:
-            dayText = "今日"
+            dayText = String(localized: "今日")
         case 1:
-            dayText = "明日"
+            dayText = String(localized: "明日")
         case 2:
-            dayText = "明後日"
+            dayText = String(localized: "明後日")
         default:
             let month = calendar.component(.month, from: date)
             let day = calendar.component(.day, from: date)
-            let weekday = weekdaySymbols[calendar.component(.weekday, from: date) - 1]
-            dayText = "\(month)/\(day)(\(weekday))"
+            let weekday = Recurrence.weekdaySymbols[calendar.component(.weekday, from: date) - 1]
+            dayText = String(localized: "\(month)/\(day)(\(weekday))", comment: "日付の短い表示。月/日(曜日)")
         }
 
         guard includesTime else {

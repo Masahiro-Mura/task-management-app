@@ -7,18 +7,20 @@
 - SwiftUI / iOS(Deployment Target 26.5)、Swift 5 モード、`SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`
 - 永続化は `UserDefaults`(JSON)。外部依存・SwiftPMパッケージなし
 - テストは **Swift Testing**(`import Testing` / `@Test` / `#expect`)。XCTestではない(UITestsのみXCTest)
-- UI文言・コメントは日本語
+- UI文言・コメントは日本語。日本語の文言がそのまま翻訳のキーになる（`Resources/Localizable.xcstrings`。元の言語は日本語）
+- 多言語対応：日本語・英語・フランス語・スペイン語・ドイツ語・イタリア語・ポルトガル語（ブラジル）・中国語（簡体・繁体）・韓国語。設定の「言語」で選ぶと、次に開いたときから切り替わる（`AppLanguage`）
 
 ## 構成
 
 ```
 TaskFlow/
   App/          TaskFlowApp.swift（エントリポイント）, TaskFlowIntents（Siri・ショートカット）, FocusLiveActivity（ライブアクティビティの出し入れ）
-  Models/       TaskItem, TaskPriority, DecisionContext, RecurringTask（くり返しのひな形・日本の祝日）
+  Models/       TaskItem, TaskPriority, DecisionContext, RecurringTask（くり返しのひな形・日本の祝日）, AppLanguage（アプリの言語の選択）
   Services/     DecisionEngine（推薦ロジック）, TaskStore（保存）, StepChain（一歩のつながり）, RecurrenceScheduler（くり返しの回）, TaskRescheduler（まとめて組み直す）, PrerequisiteRules（前提に選べるタスク）, TaskSplitter（分解）, QuickAddParser（1行追加の読み取り）, TitleNormalizer（書いた文をタスク名に整える）, CompletionMessages（完了のひとこと）, StepSuggester（一歩の候補。端末内AIか決まった型）, NotificationPlanner（通知の決め方と予定）, DataBackup（書き出し・読み込み）。いずれもUIに依存しない純粋なロジック
   Shared/       SharedStore（App Group）, WidgetSnapshot（ウィジェット用の写し）, ShareInbox（共有シートの受け箱）, WidgetLink（ウィジェットから開くURL）, FocusActivityAttributes（ライブアクティビティ）。アプリと拡張の両方に入れる
   ViewModels/   HomeViewModel（タスク一覧・保存・推薦の更新）
   Views/        ContentView(ホーム), AddTaskView, EditTaskView, AllTasksView, SplitTaskView, FocusView（集中画面）, DoneTodayView（今日やったこと）, CarryOverView（持ち越しの整理）, FirstStepView（一歩を足す）, StepsView（一歩の一覧）, RecurringListView（くり返し）, SettingsView（設定・保管・手放す・データ）, OnboardingView（初回の案内）
+  Resources/    Localizable.xcstrings（画面の文言と10言語の訳）, AppShortcuts.xcstrings（Siri の呼び方）, ja.lproj
   Components/   TaskRowView, CelebrationView（完了のお祝い）, PrioritySection（「高」は3件まで）, RecurrenceSection（くり返しの選択）
 Extensions/         ウィジェット・共有シートのコード（ターゲットを足すまでの置き場。手順は Extensions/README.md）
 TaskFlowTests/      ロジックの単体テスト
@@ -39,7 +41,7 @@ xcodebuild -project TaskFlow.xcodeproj -scheme TaskFlow \
 
 xcodebuild -project TaskFlow.xcodeproj -scheme TaskFlow \
   -destination 'platform=iOS Simulator,name=<上で確認した名前>' test \
-  -only-testing:TaskFlowTests
+  -only-testing:TaskFlowTests -testLanguage ja -testRegion JP
 ```
 
 UIの見た目の確認はXcodeのPreview/シミュレータで人が行う。ロジックの変更はまず `TaskFlowTests` にテストを足して確かめる。
@@ -57,6 +59,9 @@ UIの見た目の確認はXcodeのPreview/シミュレータで人が行う。�
 - 状態の変更は `HomeViewModel` を経由し、変更のたびに `saveTasks()` → `updateRecommendation()` を呼ぶ。
 - `TaskItem` の `Codable` は後方互換を保つ。フィールドを足すときは `init(from:)` で `decodeIfPresent` を使い、既存の保存データを壊さない。
 - 日本の祝日（`JapaneseHolidays`）は年に1回、次の年を足す。
+- 文言を足したら、すべての言語の訳も `Localizable.xcstrings` に足す。SwiftUI の `Text("…")` などはそのまま拾われる。`String` として使う文言は `String(localized: "…")` にする。文をつないで作らない（言語で語順が変わるため、つないだ形ごと1つの文言にする）
+- テストは日本語の文言で確かめるので、`-testLanguage ja -testRegion JP` を付けて動かす
+- 1行入力の日付・時刻の読み取り（`QuickAddParser`）と名前の整え（`TitleNormalizer`）は日本語だけ。所要時間（「15m」「1h」）はどの言語でも読める
 - 機能は足しすぎない。シンプルさ（開いて、今やる1つが分かる）を優先する。
 
 ## 製品の方向性（市場調査より）
