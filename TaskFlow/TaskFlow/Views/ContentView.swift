@@ -129,6 +129,17 @@ struct ContentView: View {
                         viewModel.lowerPriority(of: lowering)
                     }
 
+                    if let recurrence = newTask.recurrence {
+                        viewModel.addRecurring(
+                            title: newTask.title,
+                            estimatedMinutes: newTask.estimatedMinutes,
+                            priority: newTask.priority,
+                            isLight: newTask.isLight,
+                            recurrence: recurrence
+                        )
+                        return
+                    }
+
                     viewModel.addTask(
                         title: newTask.title,
                         estimatedMinutes: newTask.estimatedMinutes,
@@ -328,6 +339,17 @@ struct ContentView: View {
             // 大きいタスクは、全部やらなくても手をつけられる入り口を添える
             if task.estimatedMinutes >= Self.bigTaskMinutes {
                 bigTaskShortcuts(for: task)
+            }
+
+            // くり返しの回は、その回だけ休める
+            if task.recurringID != nil {
+                Button {
+                    viewModel.skipOccurrence(task)
+                } label: {
+                    Label("今回はお休み", systemImage: "moon.zzz")
+                }
+                .font(.subheadline)
+                .buttonStyle(.borderless)
             }
         }
         .padding(20)
@@ -545,7 +567,7 @@ struct ContentView: View {
             let when = full.deadline.map { ("期限 " + viewModel.describeQuickAddDate($0, includesTime: full.includesTime), "flag") }
                 ?? full.scheduledDate.map { (viewModel.describeQuickAddDate($0, includesTime: full.includesTime), "calendar") }
 
-            if when != nil || full.durationWasWritten || full.isLight {
+            if when != nil || full.durationWasWritten || full.isLight || full.recurrence != nil {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         if let when {
@@ -558,6 +580,10 @@ struct ContentView: View {
 
                         if full.isLight {
                             quickAddChip("軽い作業", systemImage: "leaf", part: .light)
+                        }
+
+                        if let recurrence = full.recurrence {
+                            quickAddChip(recurrence.summary, systemImage: "repeat", part: .repeat)
                         }
                     }
                 }
@@ -648,6 +674,7 @@ struct ContentView: View {
             dormantTaskIDs: viewModel.dormantTaskIDs,
             tomorrowTaskIDs: Set(viewModel.tomorrowTasks.map(\.id)),
             pinnedTaskIDs: viewModel.pinnedTaskIDs,
+            recurringTasks: viewModel.recurringTasks,
             onToggleCompletion: { task in
                 viewModel.toggleCompletion(for: task)
             },
@@ -674,6 +701,12 @@ struct ContentView: View {
             },
             onAddFirstStep: { task, title, minutes in
                 viewModel.addFirstStep(for: task, title: title, minutes: minutes)
+            },
+            onUpdateRecurring: { recurring in
+                viewModel.updateRecurring(recurring)
+            },
+            onDeleteRecurring: { recurring in
+                viewModel.deleteRecurring(recurring)
             }
         )
     }

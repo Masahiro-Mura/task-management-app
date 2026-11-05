@@ -214,26 +214,22 @@ struct EditTaskView: View {
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("保存") {
-                    let updatedTask = TaskItem(
-                        id: task.id,
-                        title: title,
-                        isCompleted: task.isCompleted,
-                        estimatedMinutes: estimatedMinutes,
-                        priority: priority,
-                        scheduledDate: hasScheduledDate ? scheduledDate : nil,
-                        deadline: hasDeadline ? deadline : nil,
-                        // 一覧の順に並べ、選べなくなった前提（削除・循環）は外す
-                        prerequisiteIDs: selectablePrerequisites
-                            .map(\.id)
-                            .filter { prerequisiteIDs.contains($0) },
-                        completedAt: task.completedAt,
-                        splitGroupID: task.splitGroupID,
-                        // すでに今日付けた印なら、その日時のまま残す
-                        pinnedForTodayAt: isPinnedForToday
-                            ? (task.isPinnedForToday(at: Date()) ? task.pinnedForTodayAt : Date())
-                            : nil,
-                        isLight: isLight
-                    )
+                    // 元のタスクを写して、この画面で変えるものだけ書き換える（ほかの項目は失わない）
+                    var updatedTask = task
+                    updatedTask.title = title
+                    updatedTask.estimatedMinutes = estimatedMinutes
+                    updatedTask.priority = priority
+                    updatedTask.scheduledDate = hasScheduledDate ? scheduledDate : nil
+                    updatedTask.deadline = hasDeadline ? deadline : nil
+                    // 一覧の順に並べ、選べなくなった前提（削除・循環）は外す
+                    updatedTask.prerequisiteIDs = selectablePrerequisites
+                        .map(\.id)
+                        .filter { prerequisiteIDs.contains($0) }
+                    // すでに今日付けた印なら、その日時のまま残す
+                    updatedTask.pinnedForTodayAt = isPinnedForToday
+                        ? (task.isPinnedForToday(at: Date()) ? task.pinnedForTodayAt : Date())
+                        : nil
+                    updatedTask.isLight = isLight
 
                     if priority == .high, let lowering {
                         onLowerPriority(lowering)

@@ -51,6 +51,10 @@ final class HomeViewModel: ObservableObject {
     /// 優先度「高」にできるタスクの数
     nonisolated static let maxHighPriorityTasks = 3
 
+    /// くり返すタスクのひな形
+    @Published private(set) var recurringTasks: [RecurringTask] = []
+    private let recurringStorageKey = "taskFlow.recurring"
+
     private let decisionEngine = DecisionEngine()
     private let userDefaults: UserDefaults
     private let calendar: Calendar
@@ -211,6 +215,7 @@ final class HomeViewModel: ObservableObject {
         }
 
         skippedUntil = loadSkippedUntil()
+        recurringTasks = loadRecurringTasks()
 
         updateRecommendation()
     }
@@ -394,6 +399,146 @@ final class HomeViewModel: ObservableObject {
         updateRecommendation()
     }
 
+    // MARK: - くり返し
+
+    /// くり返すタスクを追加する。今日が回の日なら、今日の分もすぐ出す
+    func addRecurring(
+        title: String,
+        estimatedMinutes: Int,
+        priority: TaskPriority = .medium,
+        isLight: Bool = false,
+        recurrence: Recurrence
+    ) {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return
+        }
+
+        recurringTasks.append(
+            RecurringTask(
+                title: trimmed,
+                estimatedMinutes: estimatedMinutes,
+                priority: priority,
+                isLight: isLight,
+                recurrence: recurrence,
+                startDate: calendar.startOfDay(for: now())
+            )
+        )
+        saveRecurringTasks()
+        updateRecommendation()
+    }
+
+    /// くり返すタスクの中身を変える。すでに出ている今日の分の名前と時間もそろえる
+    func updateRecurring(_ updated: RecurringTask) {
+        guard let index = recurringTasks.firstIndex(where: { $0.id == updated.id }) else {
+            return
+        }
+
+        recurringTasks[index] = updated
+
+        for taskIndex in tasks.indices where tasks[taskIndex].recurringID == updated.id && !tasks[taskIndex].isCompleted {
+            tasks[taskIndex].title = updated.title
+            tasks[taskIndex].estimatedMinutes = updated.estimatedMinutes
+            tasks[taskIndex].priority = updated.priority
+            tasks[taskIndex].isLight = updated.isLight
+        }
+
+        saveRecurringTasks()
+        saveTasks()
+        updateRecommendation()
+    }
+
+    /// くり返しをやめる。まだ終えていない回も消す（終えた回は「今日やったこと」のために残す）
+    func deleteRecurring(_ recurring: RecurringTask) {
+        recurringTasks.removeAll { $0.id == recurring.id }
+        tasks.removeAll { $0.recurringID == recurring.id && !$0.isCompleted }
+        saveRecurringTasks()
+        saveTasks()
+        updateRecommendation()
+    }
+
+    /// くり返しの回を「今回はお休み」にする。その日の分を消し、また出てこないよう覚えておく
+    func skipOccurrence(_ task: TaskItem) {
+        guard let recurringID = task.recurringID,
+              let index = recurringTasks.firstIndex(where: { $0.id == recurringID }) else {
+            return
+        }
+
+        let day = calendar.startOfDay(for: task.occurrenceDate ?? now())
+        recurringTasks[index].skippedDays.append(day)
+        // 古いお休みの記録は持ち続けない
+        recurringTasks[index].skippedDays.removeAll { $0 < calendar.startOfDay(for: now()).addingTimeInterval(-60 * 60 * 24 * 7) }
+        tasks.removeAll { $0.id == task.id }
+
+        saveRecurringTasks()
+        saveTasks()
+        updateRecommendation()
+    }
+
+    /// くり返しのひな形から、今日の回を出す。持ち越さない回で過ぎたものは静かに流す
+    private func refreshOccurrences() {
+        let today = calendar.startOfDay(for: now())
+        let carriesOver = Dictionary(
+            uniqueKeysWithValues: recurringTasks.map { ($0.id, $0.recurrence.carriesOver) }
+        )
+
+        let before = tasks.count
+        tasks.removeAll { task in
+            guard let recurringID = task.recurringID,
+                  let occurrenceDate = task.occurrenceDate,
+                  !task.isCompleted,
+                  occurrenceDate < today else {
+                return false
+            }
+            return !(carriesOver[recurringID] ?? true)
+        }
+        var changed = tasks.count != before
+
+        for recurring in recurringTasks where recurring.occurs(on: today, calendar: calendar) {
+            let alreadyExists = tasks.contains { task in
+                task.recurringID == recurring.id
+                    && task.occurrenceDate.map { calendar.isDate($0, inSameDayAs: today) } == true
+            }
+
+            guard !alreadyExists else {
+                continue
+            }
+
+            tasks.append(
+                TaskItem(
+                    title: recurring.title,
+                    estimatedMinutes: recurring.estimatedMinutes,
+                    priority: recurring.priority,
+                    scheduledDate: today,
+                    updatedAt: now(),
+                    isLight: recurring.isLight,
+                    recurringID: recurring.id,
+                    occurrenceDate: today
+                )
+            )
+            changed = true
+        }
+
+        if changed {
+            saveTasks()
+        }
+    }
+
+    private func loadRecurringTasks() -> [RecurringTask] {
+        guard let data = userDefaults.data(forKey: recurringStorageKey),
+              let saved = try? JSONDecoder().decode([RecurringTask].self, from: data) else {
+            return []
+        }
+        return saved
+    }
+
+    private func saveRecurringTasks() {
+        guard let data = try? JSONEncoder().encode(recurringTasks) else {
+            return
+        }
+        userDefaults.set(data, forKey: recurringStorageKey)
+    }
+
     // MARK: - 優先度「高」は3件まで
 
     /// `taskID` 以外で、優先度「高」の未完了タスク
@@ -475,6 +620,16 @@ final class HomeViewModel: ObservableObject {
     ) -> Bool {
         guard let parsed = previewQuickAdd(text, ignoring: ignoring) else {
             return false
+        }
+
+        if let recurrence = parsed.recurrence {
+            addRecurring(
+                title: parsed.title,
+                estimatedMinutes: parsed.estimatedMinutes,
+                isLight: parsed.isLight,
+                recurrence: recurrence
+            )
+            return true
         }
 
         addTask(
@@ -763,6 +918,8 @@ final class HomeViewModel: ObservableObject {
 
     /// 現在のタスク一覧から推薦を再計算する
     func updateRecommendation() {
+        refreshOccurrences()
+
         let currentDate = now()
 
         // 時間が過ぎたものと、なくなったタスクの「今はやらない」を外す

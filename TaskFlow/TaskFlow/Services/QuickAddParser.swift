@@ -12,6 +12,7 @@ import Foundation
 /// 読む時刻：15時・15時30分・15時半・15:30・午後3時
 /// 「まで」「までに」が付けば期限、なければ予定日。所要時間は末尾だけを読み、5〜480分・5分単位に切り上げる。
 /// 「軽」「軽い」「（軽）」を単語として書くと、頭を使わない軽い作業の印になる（例：「メール整理 軽 10分」）。
+/// 「毎日」「毎週月曜」「毎週月・木」「毎月20日」「3日ごと」と書くと、くり返すタスクになる（例：「毎週月曜にゴミ出し 5分」）。
 nonisolated enum QuickAddParser {
 
     /// 読み取る項目。読み取り結果の表示でタップすると、その項目を外せる
@@ -19,6 +20,7 @@ nonisolated enum QuickAddParser {
         case when
         case duration
         case light
+        case `repeat`
     }
 
     struct Result: Equatable {
@@ -35,6 +37,9 @@ nonisolated enum QuickAddParser {
 
         /// 「軽」と書かれていたか
         var isLight = false
+
+        /// くり返しが書かれていたら、そのきまり
+        var recurrence: Recurrence? = nil
     }
 
     static let minuteRange = 5...480
@@ -63,6 +68,20 @@ nonisolated enum QuickAddParser {
         if !ignoring.contains(.light),
            let match = remaining.firstMatch(of: lightPattern) {
             result.isLight = true
+            remaining.replaceSubrange(match.range, with: " ")
+            remaining = remaining.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        // くり返し（「毎週月曜」の「月曜」を日付として読まないよう、日付より先に読む）
+        if !ignoring.contains(.repeat),
+           let match = remaining.firstMatch(of: repeatPattern),
+           let rule = repeatRule(
+               daily: match.output.daily != nil,
+               weekdays: match.output.weekdays.map(String.init),
+               monthDay: match.output.monthDay.flatMap { Int($0) },
+               every: match.output.every.flatMap { Int($0) }
+           ) {
+            result.recurrence = Recurrence(rule: rule)
             remaining.replaceSubrange(match.range, with: " ")
             remaining = remaining.trimmingCharacters(in: .whitespacesAndNewlines)
         }
@@ -173,6 +192,38 @@ nonisolated enum QuickAddParser {
     }
 
     // MARK: - 読み取りの中身
+
+    /// 「毎日」「毎週月曜」「毎週月・木」「毎月20日」「3日ごと」と、そのあとのつなぎの助詞
+    private static let repeatPattern = #/(?:(?<daily>毎日)|毎週(?<weekdays>[月火水木金土日](?:[・、,]?[月火水木金土日])*)曜?日?|毎月(?<monthDay>\d{1,2})日|(?<every>\d{1,3})日ごと)\s*(?:に|の|は|、)?/#
+
+    private static func repeatRule(
+        daily: Bool,
+        weekdays: String?,
+        monthDay: Int?,
+        every: Int?
+    ) -> Recurrence.Rule? {
+        if daily {
+            return .daily
+        }
+
+        if let weekdays {
+            let values = weekdays.compactMap { character -> Int? in
+                weekdaySymbols.firstIndex(of: String(character)).map { $0 + 1 }
+            }
+            let unique = Array(Set(values)).sorted()
+            return unique.isEmpty ? nil : .weekly(weekdays: unique)
+        }
+
+        if let monthDay, (1...31).contains(monthDay) {
+            return .monthly(day: monthDay)
+        }
+
+        if let every {
+            return every == 1 ? .daily : (2...365).contains(every) ? .everyNDays(every) : nil
+        }
+
+        return nil
+    }
 
     /// 前後が空白か端にある「軽」「軽い」と、かっこ付きの「（軽）」「(軽)」
     private static let lightPattern = #/(?:^|\s)軽い?(?=\s|$)|（軽）|\(軽\)/#

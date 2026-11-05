@@ -14,11 +14,11 @@
 ```
 TaskFlow/
   App/          TaskFlowApp.swift（エントリポイント）
-  Models/       TaskItem, TaskPriority, DecisionContext
+  Models/       TaskItem, TaskPriority, DecisionContext, RecurringTask（くり返しのひな形・日本の祝日）
   Services/     DecisionEngine（推薦ロジック）, PrerequisiteRules（前提に選べるタスク）, TaskSplitter（分解）, QuickAddParser（1行追加の読み取り）, CompletionMessages（完了のひとこと）, StepSuggester（一歩の候補。端末内AIか決まった型）。いずれもUIに依存しない純粋なロジック
   ViewModels/   HomeViewModel（タスク一覧・保存・推薦の更新）
-  Views/        ContentView(ホーム), AddTaskView, EditTaskView, AllTasksView, SplitTaskView, FocusView（集中画面）, DoneTodayView（今日やったこと）, CarryOverView（持ち越しの整理）, FirstStepView（最初の一歩）
-  Components/   TaskRowView, CelebrationView（完了のお祝い）, PrioritySection（「高」は3件まで）
+  Views/        ContentView(ホーム), AddTaskView, EditTaskView, AllTasksView, SplitTaskView, FocusView（集中画面）, DoneTodayView（今日やったこと）, CarryOverView（持ち越しの整理）, FirstStepView（最初の一歩）, RecurringListView（くり返し）
+  Components/   TaskRowView, CelebrationView（完了のお祝い）, PrioritySection（「高」は3件まで）, RecurrenceSection（くり返しの選択）
 TaskFlowTests/      ロジックの単体テスト
 TaskFlowUITests/    UIテスト
 ```
@@ -48,6 +48,7 @@ UIの見た目の確認はXcodeのPreview/シミュレータで人が行う。�
 - 推薦には必ず理由文(`reason`)を付ける。理由を出せない判断は入れない。
 - 状態の変更は `HomeViewModel` を経由し、変更のたびに `saveTasks()` → `updateRecommendation()` を呼ぶ。
 - `TaskItem` の `Codable` は後方互換を保つ。フィールドを足すときは `init(from:)` で `decodeIfPresent` を使い、既存の保存データを壊さない。
+- 日本の祝日（`JapaneseHolidays`）は年に1回、次の年を足す。
 - 機能は足しすぎない。シンプルさ（開いて、今やる1つが分かる）を優先する。
 
 ## 製品の方向性（市場調査より）

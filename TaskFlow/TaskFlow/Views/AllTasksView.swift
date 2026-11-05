@@ -11,6 +11,7 @@ struct AllTasksView: View {
     var dormantTaskIDs: Set<UUID> = []
     var tomorrowTaskIDs: Set<UUID> = []
     var pinnedTaskIDs: Set<UUID> = []
+    var recurringTasks: [RecurringTask] = []
     let onToggleCompletion: (TaskItem) -> Void
     let onDelete: (TaskItem) -> Void
     let onUpdate: (TaskItem) -> Void
@@ -20,6 +21,8 @@ struct AllTasksView: View {
     var onLowerPriority: (UUID) -> Void = { _ in }
     var onReschedule: (Set<UUID>, HomeViewModel.RescheduleOption) -> Void = { _, _ in }
     var onAddFirstStep: (TaskItem, String, Int) -> Void = { _, _, _ in }
+    var onUpdateRecurring: (RecurringTask) -> Void = { _ in }
+    var onDeleteRecurring: (RecurringTask) -> Void = { _ in }
 
     private func note(for task: TaskItem) -> String? {
         if dormantTaskIDs.contains(task.id) {
@@ -32,6 +35,10 @@ struct AllTasksView: View {
 
         if tomorrowTaskIDs.contains(task.id) {
             return "明日"
+        }
+
+        if task.recurringID != nil {
+            return "くり返し"
         }
 
         return nil
@@ -96,6 +103,18 @@ struct AllTasksView: View {
         .environment(\.editMode, .constant(isSelecting ? .active : .inactive))
         .navigationTitle("すべてのタスク")
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                NavigationLink {
+                    RecurringListView(
+                        recurringTasks: recurringTasks,
+                        onUpdate: onUpdateRecurring,
+                        onDelete: onDeleteRecurring
+                    )
+                } label: {
+                    Label("くり返し", systemImage: "repeat")
+                }
+            }
+
             ToolbarItem(placement: .primaryAction) {
                 Button(isSelecting ? "完了" : "選択") {
                     isSelecting.toggle()

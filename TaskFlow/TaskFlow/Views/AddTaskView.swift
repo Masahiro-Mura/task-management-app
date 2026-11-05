@@ -14,6 +14,9 @@ struct AddTaskView: View {
 
         /// 優先度「高」の上限のために「中」に戻すタスク
         var lowering: UUID?
+
+        /// くり返すなら、そのきまり（予定日・期限は使わない）
+        var recurrence: Recurrence?
     }
 
     @Environment(\.dismiss) private var dismiss
@@ -23,6 +26,7 @@ struct AddTaskView: View {
     @State private var priority: TaskPriority = .medium
     @State private var lowering: UUID?
     @State private var isLight = false
+    @State private var recurrence: Recurrence?
 
     @State private var hasScheduledDate = false
     @State private var scheduledDate = Date()
@@ -59,6 +63,9 @@ struct AddTaskView: View {
                     otherHighPriorityTasks: otherHighPriorityTasks
                 )
 
+                RecurrenceSection(recurrence: $recurrence)
+
+                if recurrence == nil {
                 Section {
                     Toggle("実施予定日を設定する", isOn: $hasScheduledDate)
 
@@ -86,6 +93,7 @@ struct AddTaskView: View {
                         )
                     }
                 }
+                }
             }
             .navigationTitle("タスクを追加")
             .toolbar {
@@ -105,7 +113,8 @@ struct AddTaskView: View {
                                 scheduledDate: hasScheduledDate ? scheduledDate : nil,
                                 deadline: hasDeadline ? deadline : nil,
                                 isLight: isLight,
-                                lowering: priority == .high ? lowering : nil
+                                lowering: priority == .high ? lowering : nil,
+                                recurrence: recurrence
                             )
                         )
 

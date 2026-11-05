@@ -47,6 +47,12 @@ struct TaskItem: Identifiable, Equatable, Codable {
     /// 頭を使わない軽い作業か。「気が乗らない」ときの推薦に使う
     var isLight: Bool
 
+    /// くり返しのひな形（`RecurringTask`）から作られた回なら、そのID
+    var recurringID: UUID?
+
+    /// くり返しの回の日付（その日の始まり）
+    var occurrenceDate: Date?
+
     init(
         id: UUID = UUID(),
         title: String,
@@ -60,7 +66,9 @@ struct TaskItem: Identifiable, Equatable, Codable {
         completedAt: Date? = nil,
         splitGroupID: UUID? = nil,
         pinnedForTodayAt: Date? = nil,
-        isLight: Bool = false
+        isLight: Bool = false,
+        recurringID: UUID? = nil,
+        occurrenceDate: Date? = nil
     ) {
         self.id = id
         self.title = title
@@ -75,6 +83,8 @@ struct TaskItem: Identifiable, Equatable, Codable {
         self.splitGroupID = splitGroupID
         self.pinnedForTodayAt = pinnedForTodayAt
         self.isLight = isLight
+        self.recurringID = recurringID
+        self.occurrenceDate = occurrenceDate
     }
 
     init(from decoder: Decoder) throws {
@@ -130,6 +140,16 @@ struct TaskItem: Identifiable, Equatable, Codable {
             Bool.self,
             forKey: .isLight
         ) ?? false
+
+        recurringID = try container.decodeIfPresent(
+            UUID.self,
+            forKey: .recurringID
+        )
+
+        occurrenceDate = try container.decodeIfPresent(
+            Date.self,
+            forKey: .occurrenceDate
+        )
     }
 }
 
