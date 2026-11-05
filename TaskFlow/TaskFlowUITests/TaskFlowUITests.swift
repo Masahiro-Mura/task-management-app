@@ -7,6 +7,12 @@ final class TaskFlowUITests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
+        XCUIDevice.shared.orientation = .portrait
+    }
+
+    override func tearDownWithError() throws {
+        // 次にアプリを開いたときに横向きにならないよう、縦に戻しておく
+        XCUIDevice.shared.orientation = .portrait
     }
 
     @MainActor

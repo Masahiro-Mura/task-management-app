@@ -43,6 +43,8 @@ xcodebuild -project TaskFlow.xcodeproj -scheme TaskFlow \
 UIの見た目の確認はXcodeのPreview/シミュレータで人が行う。ロジックの変更はまず `TaskFlowTests` にテストを足して確かめる。
 
 - UIテスト（`TaskFlowUITests`）は `-uiTesting` で起動し、空の専用の保存先を使う（`HomeViewModel.makeForApp`）。画面の要素は `accessibilityIdentifier` で探す。
+- UIテストを回すと、シミュレータに「TaskFlowUITests-Runner」というテスト実行用アプリが入る（Xcode の仕組み。リリースには含まれない）。手元で回したあとは消しておく：`xcrun simctl uninstall booted com.masahiromura.TaskFlowUITests.xctrunner`。ふだんの確認は単体テスト（`-only-testing:TaskFlowTests`）だけでよく、UIテストは GitHub Actions に任せる。
+- UIテストは向きを縦に戻してから終える（シミュレータが横向きのまま残らないように）。iPhone のアプリ自体も縦向きに固定している（`AppDelegate`）。
 - push と pull request のたびに GitHub Actions（リポジトリ直下の `.github/workflows/tests.yml`）でテストが回る。
 - ロジックは `Services/` の純粋な型（`DecisionEngine`, `StepChain`, `RecurrenceScheduler`, `TaskRescheduler` など）に置き、`HomeViewModel` はそれらをつなぐ役にとどめる。保存のキーと読み書きは `TaskStore` にまとめる。
 
