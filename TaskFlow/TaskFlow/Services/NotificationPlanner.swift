@@ -30,15 +30,24 @@ enum NotificationPlanner {
     nonisolated static let responseWindow: TimeInterval = 60 * 60 * 12
 
     /// 期限が近いのに終わっていないタスクへの通知。期限の3時間前に1回だけ
-    static func deadlineReminders(for tasks: [TaskItem], now: Date) -> [PlannedNotification] {
+    ///
+    /// - Parameter missedSince: 集中していて通知を止めていた間の始まり。その間に出るはずだったものは、すぐ（1分後に）出す
+    static func deadlineReminders(
+        for tasks: [TaskItem],
+        now: Date,
+        missedSince: Date? = nil
+    ) -> [PlannedNotification] {
         tasks.compactMap { task in
-            guard !task.isCompleted, let deadline = task.deadline else {
+            guard !task.isCompleted, let deadline = task.deadline, deadline > now else {
                 return nil
             }
 
-            let fireDate = deadline.addingTimeInterval(-deadlineLeadTime)
-            guard fireDate > now else {
-                return nil
+            var fireDate = deadline.addingTimeInterval(-deadlineLeadTime)
+            if fireDate <= now {
+                guard let missedSince, fireDate >= missedSince else {
+                    return nil
+                }
+                fireDate = now.addingTimeInterval(60)
             }
 
             return PlannedNotification(

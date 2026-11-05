@@ -15,6 +15,9 @@ struct AllTasksView: View {
 
     /// 完了して7日たち、一覧から隠しているもの
     var hiddenCompletedTasks: [TaskItem] = []
+
+    /// 一歩ずつ進めているタスクに添える「一歩ずつ・1/3 済み」
+    var stepNotes: [UUID: String] = [:]
     let onToggleCompletion: (TaskItem) -> Void
     let onDelete: (TaskItem) -> Void
     let onUpdate: (TaskItem) -> Void
@@ -38,6 +41,10 @@ struct AllTasksView: View {
 
         if tomorrowTaskIDs.contains(task.id) {
             return "明日"
+        }
+
+        if let stepNote = stepNotes[task.id] {
+            return stepNote
         }
 
         if task.recurringID != nil {

@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
 
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.openURL) private var openURL
 
     @StateObject private var viewModel = HomeViewModel()
     @State private var isShowingAddTask = false
@@ -174,16 +175,15 @@ struct ContentView: View {
                 }
             }
             .sheet(item: $firstStepTask) { task in
-                FirstStepView(task: task) { title, minutes in
-                    viewModel.addFirstStep(for: task, title: title, minutes: minutes)
-                }
+                // 一歩から開いたときは、その元のタスクの一歩の一覧を出す
+                StepsView(viewModel: viewModel, parentID: task.parentTaskID ?? task.id)
             }
             .fullScreenCover(
                 isPresented: Binding(
                     get: { viewModel.focusSession != nil },
                     set: { isPresented in
                         if !isPresented {
-                            viewModel.finishFocus(completing: false)
+                            endFocus(completing: false)
                         }
                     }
                 )
@@ -195,10 +195,10 @@ struct ContentView: View {
                         startedAt: session.startedAt,
                         trialMinutes: session.trialMinutes,
                         onComplete: {
-                            viewModel.finishFocus(completing: true)
+                            endFocus(completing: true)
                         },
                         onStop: {
-                            viewModel.finishFocus(completing: false)
+                            endFocus(completing: false)
                         },
                         onContinue: {
                             viewModel.continueFocus()
@@ -345,6 +345,28 @@ struct ContentView: View {
                 .foregroundStyle(.blue)
 
             VStack(alignment: .leading, spacing: 6) {
+                // 一歩なら、どのタスクの何歩目かを小さく添える（タイトルには入れない）
+                if let position = viewModel.stepPosition(of: task) {
+                    // 何歩目かは必ず見えるように先に置き、長い元のタスク名だけを省略する
+                    HStack(spacing: 6) {
+                        Text("\(position.index)歩目")
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.blue)
+
+                        Text(CompletionMessages.baseTitle(of: position.parentTitle))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                    .font(.footnote)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("「\(CompletionMessages.baseTitle(of: position.parentTitle))」の\(position.index)歩目")
+                } else if let progress = stepProgressText(for: task) {
+                    Text(progress)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
                 Text(task.title)
                     .font(.title2)
                     .fontWeight(.semibold)
@@ -358,7 +380,7 @@ struct ContentView: View {
                 .font(.body)
 
             Button {
-                viewModel.startFocus()
+                beginFocus()
             } label: {
                 Label("始める", systemImage: "play.fill")
                     .frame(maxWidth: .infinity)
@@ -719,6 +741,11 @@ struct ContentView: View {
             pinnedTaskIDs: viewModel.pinnedTaskIDs,
             recurringTasks: viewModel.recurringTasks,
             hiddenCompletedTasks: viewModel.hiddenCompletedTasks,
+            stepNotes: Dictionary(
+                uniqueKeysWithValues: viewModel.visibleAllTasks.compactMap { task in
+                    stepProgressText(for: task).map { (task.id, $0) }
+                }
+            ),
             onToggleCompletion: { task in
                 viewModel.toggleCompletion(for: task)
             },
@@ -774,13 +801,51 @@ struct ContentView: View {
         )
     }
 
+    // MARK: - 集中の始めと終わり
+
+    /// 集中を始める。設定していれば、ショートカットで iPhone の集中モードもオンにする
+    private func beginFocus(on taskID: UUID? = nil, trialMinutes: Int? = nil) {
+        viewModel.startFocus(on: taskID, trialMinutes: trialMinutes)
+
+        if viewModel.focusSession != nil, let url = viewModel.focusShortcutURL(starting: true) {
+            openURL(url)
+        }
+    }
+
+    /// 集中を終える。設定していれば、ショートカットで集中モードをオフにする
+    private func endFocus(completing: Bool) {
+        let wasFocusing = viewModel.focusSession != nil
+        viewModel.finishFocus(completing: completing)
+
+        if wasFocusing, let url = viewModel.focusShortcutURL(starting: false) {
+            openURL(url)
+        }
+    }
+
     // MARK: - 取りかかる入り口
+
+    /// 一歩がまだなければ「最初の一歩を決める」、あれば一覧を開く言葉にする
+    private func stepsButtonTitle(for task: TaskItem) -> String {
+        if task.parentTaskID != nil {
+            return "ほかの一歩を見る"
+        }
+        return viewModel.steps(of: task.id).isEmpty ? "最初の一歩を決める" : "一歩を見る"
+    }
+
+    /// 一歩ずつ進めている元のタスクなら「一歩ずつ・2/3 済み」
+    private func stepProgressText(for task: TaskItem) -> String? {
+        let steps = viewModel.steps(of: task.id)
+        guard !steps.isEmpty else {
+            return nil
+        }
+        return "一歩ずつ・\(steps.filter(\.isCompleted).count)/\(steps.count) 済み"
+    }
 
     /// 「5分だけやる」「最初の一歩を決める」。全部やる気になれなくても、手をつけられるようにする
     private func startShortcuts(for task: TaskItem) -> some View {
         HStack(spacing: 16) {
             Button {
-                viewModel.startFocus(on: task.id, trialMinutes: HomeViewModel.trialFocusMinutes)
+                beginFocus(on: task.id, trialMinutes: HomeViewModel.trialFocusMinutes)
             } label: {
                 Label("\(HomeViewModel.trialFocusMinutes)分だけやる", systemImage: "timer")
             }
@@ -788,7 +853,7 @@ struct ContentView: View {
             Button {
                 firstStepTask = task
             } label: {
-                Label("最初の一歩を決める", systemImage: "shoeprints.fill")
+                Label(stepsButtonTitle(for: task), systemImage: "shoeprints.fill")
             }
         }
         .font(.subheadline)

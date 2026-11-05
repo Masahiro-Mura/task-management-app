@@ -44,7 +44,9 @@ struct EasySplitTests {
         viewModel.addFirstStep(for: big, title: "  机の上だけ片づける ", minutes: 10)
 
         let step = try #require(viewModel.recommendation?.task)
-        #expect(step.title == "部屋の片付け：机の上だけ片づける")
+        // タイトルには元のタスク名を入れず、元のタスクにぶら下げる
+        #expect(step.title == "机の上だけ片づける")
+        #expect(step.parentTaskID == big.id)
         #expect(step.estimatedMinutes == 10)
         #expect(step.priority == .high)
         #expect(step.splitGroupID == big.id)
@@ -103,7 +105,7 @@ struct EasySplitTests {
         viewModel.addFirstStep(for: candidate, title: "床の物を拾う", minutes: 10)
 
         #expect(viewModel.nextStepCandidate == nil)
-        #expect(viewModel.recommendation?.task.title == "部屋の片付け：床の物を拾う")
+        #expect(viewModel.recommendation?.task.title == "床の物を拾う")
     }
 
     @Test

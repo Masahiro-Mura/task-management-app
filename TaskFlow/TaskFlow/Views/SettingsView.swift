@@ -64,6 +64,33 @@ struct SettingsView: View {
             }
 
             Section {
+                Toggle(
+                    "始めたら、ほかの通知も止める",
+                    isOn: Binding(
+                        get: { viewModel.usesFocusShortcut },
+                        set: { viewModel.setUsesFocusShortcut($0) }
+                    )
+                )
+
+                if viewModel.usesFocusShortcut {
+                    DisclosureGroup("ショートカットの作り方") {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("1. 「ショートカット」アプリで、新しいショートカットを作り、名前を「\(HomeViewModel.focusStartShortcutName)」にします。")
+                            Text("2. 「集中モードを設定」を足し、「おやすみモード」（またはお好きな集中モード）を「オン」「オフにするまで」にします。")
+                            Text("3. 最後に「Appを開く」を足して「TaskFlow」を選びます（終わったら自動で戻ってきます）。")
+                            Text("4. 同じように「\(HomeViewModel.focusEndShortcutName)」を作り、集中モードを「オフ」にして、TaskFlow を開くようにします。")
+                        }
+                        .font(.footnote)
+                        .padding(.vertical, 4)
+                    }
+                }
+            } header: {
+                Text("集中するとき")
+            } footer: {
+                Text("「始める」「5分だけやる」を押すと、TaskFlow の通知は自動で止まり、終わると戻ります。ほかのアプリの通知も止めたいときは、この設定をオンにして、ショートカットを2つ作ってください。iPhone の決まりで、アプリから直接は集中モードを切り替えられないためです。")
+            }
+
+            Section {
                 NavigationLink {
                     TaskArchiveListView(
                         title: "保管したタスク",

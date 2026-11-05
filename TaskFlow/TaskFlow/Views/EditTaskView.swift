@@ -176,7 +176,7 @@ struct EditTaskView: View {
 
             if !task.isCompleted {
                 Section {
-                    Button("最初の一歩を決める") {
+                    Button("一歩を足す") {
                         isShowingFirstStep = true
                     }
 

@@ -53,6 +53,9 @@ struct TaskItem: Identifiable, Equatable, Codable {
     /// くり返しの回の日付（その日の始まり）
     var occurrenceDate: Date?
 
+    /// 「一歩」なら、それが属する元のタスクのID。一歩のタイトルには元のタスク名を入れない
+    var parentTaskID: UUID?
+
     init(
         id: UUID = UUID(),
         title: String,
@@ -68,7 +71,8 @@ struct TaskItem: Identifiable, Equatable, Codable {
         pinnedForTodayAt: Date? = nil,
         isLight: Bool = false,
         recurringID: UUID? = nil,
-        occurrenceDate: Date? = nil
+        occurrenceDate: Date? = nil,
+        parentTaskID: UUID? = nil
     ) {
         self.id = id
         self.title = title
@@ -85,6 +89,7 @@ struct TaskItem: Identifiable, Equatable, Codable {
         self.isLight = isLight
         self.recurringID = recurringID
         self.occurrenceDate = occurrenceDate
+        self.parentTaskID = parentTaskID
     }
 
     init(from decoder: Decoder) throws {
@@ -149,6 +154,11 @@ struct TaskItem: Identifiable, Equatable, Codable {
         occurrenceDate = try container.decodeIfPresent(
             Date.self,
             forKey: .occurrenceDate
+        )
+
+        parentTaskID = try container.decodeIfPresent(
+            UUID.self,
+            forKey: .parentTaskID
         )
     }
 }

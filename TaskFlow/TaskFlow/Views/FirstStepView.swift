@@ -33,9 +33,9 @@ struct FirstStepView: View {
                         step: 5
                     )
                 } header: {
-                    Text("「\(CompletionMessages.baseTitle(of: task.title))」の最初の5分で何をする？")
+                    Text("「\(CompletionMessages.baseTitle(of: task.title))」の、次の5分で何をする？")
                 } footer: {
-                    Text("決めるのは最初の一歩だけで大丈夫です。終わったら、次の一歩を聞きます。")
+                    Text("決めるのは次の一歩だけで大丈夫です。ホームには、まだ済んでいない最初の一歩だけが出ます。")
                 }
 
                 Section {
@@ -78,7 +78,7 @@ struct FirstStepView: View {
                     }
                 }
             }
-            .navigationTitle("最初の一歩")
+            .navigationTitle("一歩を足す")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

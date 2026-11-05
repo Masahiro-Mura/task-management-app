@@ -208,7 +208,7 @@ final class HomeViewModel: ObservableObject {
 
     /// 「すべてのタスク」に出すもの。完了して7日たったものは除く
     var visibleAllTasks: [TaskItem] {
-        tasks.filter { !isOldCompleted($0) }
+        tasks.filter { !isOldCompleted($0) && $0.parentTaskID == nil }
     }
 
     /// 完了して7日たち、一覧から隠しているもの
@@ -493,8 +493,14 @@ final class HomeViewModel: ObservableObject {
     /// 今の設定とタスクから、通知を予定し直す
     ///
     /// - Parameter force: どちらの通知もオフでも、残っている通知を消すために呼ぶ
-    private func scheduleNotifications(force: Bool = false) {
+    private func scheduleNotifications(force: Bool = false, missedSince: Date? = nil) {
         guard deadlineNotificationsEnabled || dailyPickEnabled || force else {
+            return
+        }
+
+        // 集中している間は何も予定しない（終わったら予定し直す）
+        if focusSession != nil {
+            notifier.replaceAll(with: [])
             return
         }
 
@@ -502,7 +508,7 @@ final class HomeViewModel: ObservableObject {
         var planned: [PlannedNotification] = []
 
         if deadlineNotificationsEnabled {
-            planned += NotificationPlanner.deadlineReminders(for: tasks, now: currentDate)
+            planned += NotificationPlanner.deadlineReminders(for: tasks, now: currentDate, missedSince: missedSince)
         }
 
         if dailyPickEnabled,
@@ -564,10 +570,15 @@ final class HomeViewModel: ObservableObject {
             backUpUnreadableTasks(data)
         }
 
+        if migrateLegacySteps() {
+            saveTasks()
+        }
+
         skippedUntil = loadSkippedUntil()
         recurringTasks = loadRecurringTasks()
         archivedTasks = loadArchivedTasks()
         loadNotificationSettings()
+        usesFocusShortcut = userDefaults.bool(forKey: focusShortcutStorageKey)
 
         updateRecommendation()
         scheduleNotifications()
@@ -938,6 +949,9 @@ final class HomeViewModel: ObservableObject {
         tasks[index].updatedAt = now()
         focusSession = FocusSession(taskID: id, startedAt: now(), trialMinutes: trialMinutes)
         saveTasks()
+
+        // 集中している間は、TaskFlow の通知を出さない
+        scheduleNotifications()
     }
 
     /// 「5分だけ」のあと、そのまま続ける（目安をタスクの所要時間に戻す）
@@ -956,11 +970,50 @@ final class HomeViewModel: ObservableObject {
 
     /// 集中を終える。`completing` が true ならタスクを完了にする
     func finishFocus(completing: Bool) {
+        let startedAt = focusSession?.startedAt
+
         if completing, let task = focusedTask {
             complete(task)
         }
 
         focusSession = nil
+
+        // 集中していた間に出るはずだった期限の通知は、ここで出す
+        scheduleNotifications(missedSince: startedAt)
+    }
+
+    // MARK: - 集中モード（ショートカット）
+
+    /// 「始める」「5分だけやる」で、ショートカットを使って iPhone の集中モードをオンにするか
+    @Published private(set) var usesFocusShortcut = false
+    private let focusShortcutStorageKey = "taskFlow.focus.shortcut"
+
+    /// 集中を始めるときに動かすショートカットの名前（ユーザーが自分で作る）
+    nonisolated static let focusStartShortcutName = "TaskFlow 集中開始"
+
+    /// 集中を終えるときに動かすショートカットの名前
+    nonisolated static let focusEndShortcutName = "TaskFlow 集中終了"
+
+    func setUsesFocusShortcut(_ enabled: Bool) {
+        usesFocusShortcut = enabled
+        userDefaults.set(enabled, forKey: focusShortcutStorageKey)
+    }
+
+    /// 集中の始めか終わりに開く、ショートカットのURL。オフならnil
+    ///
+    /// アプリから iPhone の集中モードを直接は切り替えられないので、ユーザーが作ったショートカットを動かす。
+    /// ショートカットの最後で TaskFlow を開くようにしておくと、自動で戻ってくる。
+    func focusShortcutURL(starting: Bool) -> URL? {
+        guard usesFocusShortcut else {
+            return nil
+        }
+
+        let name = starting ? Self.focusStartShortcutName : Self.focusEndShortcutName
+        var components = URLComponents()
+        components.scheme = "shortcuts"
+        components.host = "run-shortcut"
+        components.queryItems = [URLQueryItem(name: "name", value: name)]
+        return components.url
     }
 
     /// 1行の入力からタスクを追加する。「請求書を送る 15分」のように時間を書ける
@@ -1057,7 +1110,16 @@ final class HomeViewModel: ObservableObject {
         saveSkippedUntil()
         updateRecommendation()
 
-        // 一歩（や分けた部分）を終えて、続きのタスクが空き時間に収まらないままなら、次の一歩を聞く
+        // 一歩を終えて、次の一歩がまだ決まっておらず、元のタスクが空き時間に収まらないままなら、次の一歩を聞く
+        if let parentID = task.parentTaskID {
+            let hasOpenStep = steps(of: parentID).contains { !$0.isCompleted }
+            let parent = tasks.first { $0.id == parentID && !$0.isCompleted }
+
+            nextStepCandidate = (!hasOpenStep && (parent?.estimatedMinutes ?? 0) > availableMinutes) ? parent : nil
+            return
+        }
+
+        // 分けた部分を終えて、続きのタスクが空き時間に収まらないままなら、次の一歩を聞く
         nextStepCandidate = task.splitGroupID.flatMap { groupID in
             tasks.first { other in
                 !other.isCompleted
@@ -1070,42 +1132,202 @@ final class HomeViewModel: ObservableObject {
 
     // MARK: - 最初の一歩
 
-    /// 大きいタスクの「最初の一歩」を、そのタスクの前提として追加する
+    /// 一歩の位置（「部屋の片付け」の2歩目・全3歩）
+    struct StepPosition: Equatable {
+        let parentID: UUID
+        let parentTitle: String
+        let index: Int
+        let total: Int
+        let completedCount: Int
+    }
+
+    /// 元のタスクの一歩（決めた順。済んだものも含む）
+    func steps(of parentID: UUID) -> [TaskItem] {
+        tasks.filter { $0.parentTaskID == parentID }
+    }
+
+    /// 一歩なら、その位置
+    func stepPosition(of task: TaskItem) -> StepPosition? {
+        guard let parentID = task.parentTaskID,
+              let parent = tasks.first(where: { $0.id == parentID }) else {
+            return nil
+        }
+
+        let all = steps(of: parentID)
+        guard let index = all.firstIndex(where: { $0.id == task.id }) else {
+            return nil
+        }
+
+        return StepPosition(
+            parentID: parentID,
+            parentTitle: parent.title,
+            index: index + 1,
+            total: all.count,
+            completedCount: all.filter(\.isCompleted).count
+        )
+    }
+
+    /// 大きいタスクに一歩を足す（いちばん後ろに）
     ///
-    /// 全部を分けなくても、一歩だけ決めれば推薦に出るようにする。
-    /// 一歩は「元のタスク名：一歩」という名前で、元のタスクの直前に並ぶ。
-    func addFirstStep(for task: TaskItem, title stepTitle: String, minutes: Int) {
+    /// 全部を分けなくても、一歩だけ決めれば推薦に出るようにする。ホームには、まだ済んでいない最初の一歩だけが出る。
+    func addStep(to parent: TaskItem, title stepTitle: String, minutes: Int) {
         let trimmed = stepTitle.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !trimmed.isEmpty,
-              let index = tasks.firstIndex(where: { $0.id == task.id }) else {
+              let parentIndex = tasks.firstIndex(where: { $0.id == parent.id }) else {
             return
         }
 
         let currentDate = now()
-        let baseTitle = CompletionMessages.baseTitle(of: tasks[index].title)
-        let groupID = tasks[index].splitGroupID ?? tasks[index].id
+        let groupID = tasks[parentIndex].splitGroupID ?? tasks[parentIndex].id
 
         let step = TaskItem(
-            title: "\(baseTitle)：\(trimmed)",
+            title: trimmed,
             estimatedMinutes: min(max(minutes, 5), 480),
-            priority: tasks[index].priority,
-            deadline: tasks[index].deadline,
-            // 元のタスクが待っていた前提は、一歩のほうが引き継ぐ
-            prerequisiteIDs: tasks[index].prerequisiteIDs,
+            priority: tasks[parentIndex].priority,
+            deadline: tasks[parentIndex].deadline,
             updatedAt: currentDate,
-            splitGroupID: groupID
+            splitGroupID: groupID,
+            parentTaskID: parent.id
         )
 
-        tasks[index].prerequisiteIDs = [step.id]
-        tasks[index].splitGroupID = groupID
-        tasks[index].updatedAt = currentDate
-        tasks.insert(step, at: index)
+        tasks[parentIndex].splitGroupID = groupID
+        tasks[parentIndex].updatedAt = currentDate
+        // 一歩は元のタスクの直前に並べる（決めた順のまま、元のタスクより前になる）
+        tasks.insert(step, at: parentIndex)
 
         skippedUntil[step.id] = nil
         nextStepCandidate = nil
+        rebuildStepChain(for: parent.id)
         saveTasks()
         updateRecommendation()
+    }
+
+    /// 以前の呼び方。最初の一歩を足す
+    func addFirstStep(for task: TaskItem, title stepTitle: String, minutes: Int) {
+        addStep(to: task, title: stepTitle, minutes: minutes)
+    }
+
+    /// 一歩を取り消す
+    func deleteStep(_ step: TaskItem) {
+        guard let parentID = step.parentTaskID else {
+            return
+        }
+
+        tasks.removeAll { $0.id == step.id }
+        rebuildStepChain(for: parentID)
+        saveTasks()
+        updateRecommendation()
+    }
+
+    /// まだ済んでいない一歩の順番を入れ替える
+    func moveOpenSteps(of parentID: UUID, fromOffsets source: IndexSet, toOffset destination: Int) {
+        let original = steps(of: parentID).filter { !$0.isCompleted }
+
+        // 並べ替え（List の onMove と同じ意味。SwiftUI に頼らずに書く）
+        let moving = source.sorted().map { original[$0] }
+        var open = original.enumerated().filter { !source.contains($0.offset) }.map(\.element)
+        let insertAt = destination - source.filter { $0 < destination }.count
+        open.insert(contentsOf: moving, at: min(max(insertAt, 0), open.count))
+
+        let openIDs = Set(open.map(\.id))
+        tasks.removeAll { openIDs.contains($0.id) }
+
+        guard let parentIndex = tasks.firstIndex(where: { $0.id == parentID }) else {
+            return
+        }
+
+        tasks.insert(contentsOf: open, at: parentIndex)
+        rebuildStepChain(for: parentID)
+        saveTasks()
+        updateRecommendation()
+    }
+
+    /// 一歩を、決めた順につなぎ直す
+    ///
+    /// まだ済んでいない一歩を順に前提としてつなぎ、元のタスクは最後の一歩を待つ。
+    /// 元のタスクがもともと待っていた前提（一歩以外）は、最初の一歩が待つ。
+    private func rebuildStepChain(for parentID: UUID) {
+        guard let parentIndex = tasks.firstIndex(where: { $0.id == parentID }) else {
+            return
+        }
+
+        let stepIndices = tasks.indices.filter { tasks[$0].parentTaskID == parentID }
+        let stepIDs = Set(stepIndices.map { tasks[$0].id })
+
+        var external: [UUID] = []
+        for id in tasks[parentIndex].prerequisiteIDs + stepIndices.flatMap({ tasks[$0].prerequisiteIDs })
+        where !stepIDs.contains(id) && id != parentID && !external.contains(id) {
+            external.append(id)
+        }
+
+        var previous: UUID?
+        for index in stepIndices where !tasks[index].isCompleted {
+            tasks[index].prerequisiteIDs = previous.map { [$0] } ?? external
+            previous = tasks[index].id
+        }
+
+        tasks[parentIndex].prerequisiteIDs = external + (previous.map { [$0] } ?? [])
+    }
+
+    /// 以前の形（「元のタスク名：一歩」というタイトル）の一歩を、元のタスクにぶら下がる形に直す
+    ///
+    /// 以前は一歩の一歩も作れたので「元：一歩目：二歩目」のように重なっていることがある。
+    /// 元のタスク名を外したあと、同じ元のタスクのほかの一歩の名前が頭に付いていれば、それも外す。
+    private func migrateLegacySteps() -> Bool {
+        var changed = false
+        var touchedParents: Set<UUID> = []
+
+        for index in tasks.indices where tasks[index].parentTaskID == nil {
+            guard let groupID = tasks[index].splitGroupID,
+                  groupID != tasks[index].id,
+                  let parent = tasks.first(where: { $0.id == groupID }) else {
+                continue
+            }
+
+            let prefix = CompletionMessages.baseTitle(of: parent.title) + "："
+            guard tasks[index].title.hasPrefix(prefix) else {
+                continue
+            }
+
+            tasks[index].title = String(tasks[index].title.dropFirst(prefix.count))
+            tasks[index].parentTaskID = parent.id
+            touchedParents.insert(parent.id)
+            changed = true
+        }
+
+        // 一歩の名前の頭に、ほかの一歩の名前が重なっていたら外す（短い名前から順に試す）
+        for index in tasks.indices {
+            guard let parentID = tasks[index].parentTaskID else {
+                continue
+            }
+
+            let siblingTitles = tasks
+                .filter { $0.parentTaskID == parentID && $0.id != tasks[index].id }
+                .map(\.title)
+                .sorted { $0.count > $1.count }
+
+            var stripped = true
+            while stripped {
+                stripped = false
+                for sibling in siblingTitles where !sibling.isEmpty {
+                    let prefix = sibling + "："
+                    if tasks[index].title.hasPrefix(prefix), tasks[index].title.count > prefix.count {
+                        tasks[index].title = String(tasks[index].title.dropFirst(prefix.count))
+                        touchedParents.insert(parentID)
+                        changed = true
+                        stripped = true
+                        break
+                    }
+                }
+            }
+        }
+
+        for parentID in touchedParents {
+            rebuildStepChain(for: parentID)
+        }
+
+        return changed
     }
 
     /// 「次の一歩を決めますか？」を閉じる
@@ -1198,11 +1420,16 @@ final class HomeViewModel: ObservableObject {
 
     /// 指定したタスクを削除する
     func deleteTask(_ task: TaskItem) {
-        tasks.removeAll { $0.id == task.id }
+        tasks.removeAll { $0.id == task.id || $0.parentTaskID == task.id }
 
         // 削除したタスクを前提にしていたタスクが、推薦されないまま残らないようにする
         for index in tasks.indices {
             tasks[index].prerequisiteIDs.removeAll { $0 == task.id }
+        }
+
+        // 一歩を消したなら、残りの一歩をつなぎ直す
+        if let parentID = task.parentTaskID {
+            rebuildStepChain(for: parentID)
         }
 
         saveTasks()
