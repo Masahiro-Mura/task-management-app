@@ -372,6 +372,44 @@ struct DecisionEngineTests {
         #expect(summary.shortestTooLongMinutes == nil)
     }
 
+    // MARK: - 今はやらない
+
+    @Test
+    func skippedTaskIsNotRecommended() {
+        let first = TaskItem(title: "A", estimatedMinutes: 10)
+        let second = TaskItem(title: "B", estimatedMinutes: 20)
+
+        let result = engine.recommend(
+            from: [first, second],
+            context: DecisionContext(
+                availableMinutes: 45,
+                currentDate: now,
+                skippedTaskIDs: [first.id]
+            )
+        )
+
+        #expect(result?.task.id == second.id)
+        #expect(result?.factor == .onlyCandidate)
+    }
+
+    @Test
+    func summaryCountsSkippedTasksSeparately() {
+        let skipped = TaskItem(title: "A", estimatedMinutes: 10)
+
+        let summary = engine.summarizeNoRecommendation(
+            from: [skipped],
+            context: DecisionContext(
+                availableMinutes: 45,
+                currentDate: now,
+                skippedTaskIDs: [skipped.id]
+            )
+        )
+
+        #expect(summary.skippedCount == 1)
+        #expect(summary.tooLongCount == 0)
+        #expect(!summary.allCompleted)
+    }
+
     // MARK: - 冬眠
 
     private var fifteenDaysAgo: Date {

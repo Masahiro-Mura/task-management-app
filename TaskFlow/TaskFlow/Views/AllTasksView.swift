@@ -7,11 +7,24 @@ struct AllTasksView: View {
 
     let tasks: [TaskItem]
     var dormantTaskIDs: Set<UUID> = []
+    var tomorrowTaskIDs: Set<UUID> = []
     let onToggleCompletion: (TaskItem) -> Void
     let onDelete: (TaskItem) -> Void
     let onUpdate: (TaskItem) -> Void
     var onWake: (TaskItem) -> Void = { _ in }
     var onSplit: (TaskItem, [TaskSplitPart]) -> Void = { _, _ in }
+
+    private func note(for task: TaskItem) -> String? {
+        if dormantTaskIDs.contains(task.id) {
+            return "冬眠中（右へスワイプで起こす）"
+        }
+
+        if tomorrowTaskIDs.contains(task.id) {
+            return "明日"
+        }
+
+        return nil
+    }
 
     var body: some View {
         List(tasks) { task in
@@ -29,9 +42,7 @@ struct AllTasksView: View {
             } label: {
                 TaskRowView(
                     task: task,
-                    note: dormantTaskIDs.contains(task.id)
-                        ? "冬眠中（右へスワイプで起こす）"
-                        : nil,
+                    note: note(for: task),
                     onToggleCompletion: {
                         onToggleCompletion(task)
                     }

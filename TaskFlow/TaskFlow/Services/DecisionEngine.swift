@@ -42,6 +42,9 @@ struct NoRecommendationSummary: Equatable {
     /// 空き時間に収まらないタスクのうち、最も短い所要時間（分）
     var shortestTooLongMinutes: Int?
 
+    /// 「今はやらない」で一時的に外しているタスク数
+    var skippedCount: Int = 0
+
     var allCompleted: Bool {
         incompleteCount == 0 && dormantCount == 0
     }
@@ -70,6 +73,7 @@ struct DecisionEngine {
 
         let candidates = tasks
             .filter { !$0.isDormant(at: context.currentDate) }
+            .filter { !context.skippedTaskIDs.contains($0.id) }
             .filter { task in
                 isExecutable(
                     task,
@@ -132,11 +136,14 @@ struct DecisionEngine {
             }
         }
 
+        var skippedCount = 0
         var waitingCount = 0
         var tooLongMinutes: [Int] = []
 
         for task in activeTasks {
-            if !prerequisitesAreCompleted(task, incompleteTaskIDs: incompleteTaskIDs) {
+            if context.skippedTaskIDs.contains(task.id) {
+                skippedCount += 1
+            } else if !prerequisitesAreCompleted(task, incompleteTaskIDs: incompleteTaskIDs) {
                 waitingCount += 1
             } else if task.estimatedMinutes > context.availableMinutes {
                 tooLongMinutes.append(task.estimatedMinutes)
@@ -148,7 +155,8 @@ struct DecisionEngine {
             dormantCount: dormantCount,
             waitingForPrerequisitesCount: waitingCount,
             tooLongCount: tooLongMinutes.count,
-            shortestTooLongMinutes: tooLongMinutes.min()
+            shortestTooLongMinutes: tooLongMinutes.min(),
+            skippedCount: skippedCount
         )
     }
 

@@ -13,12 +13,33 @@ final class HomeViewModel: ObservableObject {
     /// 今回タスクに使える時間（分）
     @Published private(set) var availableMinutes = HomeViewModel.defaultAvailableMinutes
 
+    /// 直前に推薦カードから完了にしたタスク（完了前の状態）。「元に戻す」に使う
+    @Published private(set) var lastCompletedTask: TaskItem?
+
+    /// 集中して取りかかっているタスク
+    @Published private(set) var focusSession: FocusSession?
+
+    struct FocusSession: Equatable {
+        let taskID: UUID
+        let startedAt: Date
+    }
+
+    /// 「今はやらない」にしたタスクと、推薦に戻る日時
+    private var skippedUntil: [UUID: Date] = [:]
+
     private let decisionEngine = DecisionEngine()
     private let userDefaults: UserDefaults
     private let calendar: Calendar
     private let now: () -> Date
     private let tasksStorageKey = "taskFlow.tasks"
     private let availableMinutesStorageKey = "taskFlow.availableMinutes"
+    private let skippedUntilStorageKey = "taskFlow.skippedUntil"
+
+    /// 「今はやらない」で推薦から外す時間
+    nonisolated static let skipDuration: TimeInterval = 60 * 60
+
+    /// 1行で追加したとき、時間が書かれていなければ使う所要時間（分）
+    nonisolated static let defaultQuickAddMinutes = 30
 
     /// 読み込めなかった保存データの退避先キーの接頭辞
     static let unreadableTasksKeyPrefix = "taskFlow.tasks.unreadable."
@@ -150,6 +171,8 @@ final class HomeViewModel: ObservableObject {
             backUpUnreadableTasks(data)
         }
 
+        skippedUntil = loadSkippedUntil()
+
         updateRecommendation()
     }
 
@@ -171,6 +194,140 @@ final class HomeViewModel: ObservableObject {
         availableMinutes = minutes
         userDefaults.set(minutes, forKey: availableMinutesStorageKey)
         updateRecommendation()
+    }
+
+    // MARK: - 推薦カードからの操作
+
+    /// 推薦中のタスクを完了にし、「元に戻す」ができるよう完了前の状態を覚えておく
+    func completeRecommendation() {
+        guard let task = recommendation?.task else {
+            return
+        }
+
+        complete(task)
+    }
+
+    /// 直前に完了にしたタスクを未完了に戻す
+    func undoLastCompletion() {
+        guard let task = lastCompletedTask,
+              let index = tasks.firstIndex(where: { $0.id == task.id }),
+              tasks[index].isCompleted else {
+            lastCompletedTask = nil
+            return
+        }
+
+        tasks[index].isCompleted = false
+        tasks[index].updatedAt = now()
+        lastCompletedTask = nil
+        saveTasks()
+        updateRecommendation()
+    }
+
+    /// 「元に戻す」の表示を閉じる
+    func dismissUndo() {
+        lastCompletedTask = nil
+    }
+
+    /// 推薦中のタスクを、しばらく推薦から外す。理由は聞かない
+    func skipRecommendation() {
+        guard let task = recommendation?.task else {
+            return
+        }
+
+        skippedUntil[task.id] = now().addingTimeInterval(Self.skipDuration)
+        saveSkippedUntil()
+        updateRecommendation()
+    }
+
+    /// 「今はやらない」をすべて取り消す
+    func clearSkips() {
+        skippedUntil.removeAll()
+        saveSkippedUntil()
+        updateRecommendation()
+    }
+
+    /// 推薦中のタスクに集中して取りかかる
+    func startFocus() {
+        guard let task = recommendation?.task,
+              let index = tasks.firstIndex(where: { $0.id == task.id }) else {
+            return
+        }
+
+        tasks[index].updatedAt = now()
+        focusSession = FocusSession(taskID: task.id, startedAt: now())
+        saveTasks()
+    }
+
+    /// 集中しているタスク
+    var focusedTask: TaskItem? {
+        guard let taskID = focusSession?.taskID else {
+            return nil
+        }
+
+        return tasks.first { $0.id == taskID }
+    }
+
+    /// 集中を終える。`completing` が true ならタスクを完了にする
+    func finishFocus(completing: Bool) {
+        if completing, let task = focusedTask {
+            complete(task)
+        }
+
+        focusSession = nil
+    }
+
+    /// 1行の入力からタスクを追加する。「請求書を送る 15分」のように時間を書ける
+    ///
+    /// - Returns: 追加できたら true（タイトルが空なら false）
+    @discardableResult
+    func quickAdd(_ text: String) -> Bool {
+        guard let parsed = QuickAddParser.parse(
+            text,
+            defaultMinutes: Self.defaultQuickAddMinutes
+        ) else {
+            return false
+        }
+
+        addTask(
+            title: parsed.title,
+            estimatedMinutes: parsed.estimatedMinutes,
+            priority: .medium,
+            scheduledDate: nil,
+            deadline: nil
+        )
+        return true
+    }
+
+    private func complete(_ task: TaskItem) {
+        guard let index = tasks.firstIndex(where: { $0.id == task.id }),
+              !tasks[index].isCompleted else {
+            return
+        }
+
+        lastCompletedTask = tasks[index]
+        tasks[index].isCompleted = true
+        tasks[index].updatedAt = now()
+        skippedUntil[task.id] = nil
+        saveTasks()
+        saveSkippedUntil()
+        updateRecommendation()
+    }
+
+    private func loadSkippedUntil() -> [UUID: Date] {
+        guard let data = userDefaults.data(forKey: skippedUntilStorageKey),
+              let saved = try? JSONDecoder().decode([UUID: Date].self, from: data) else {
+            return [:]
+        }
+
+        return saved
+    }
+
+    private func saveSkippedUntil() {
+        guard let data = try? JSONEncoder().encode(skippedUntil) else {
+            return
+        }
+
+        userDefaults.set(data, forKey: skippedUntilStorageKey)
     }
 
     /// 新しいタスクを追加する
@@ -311,9 +468,20 @@ final class HomeViewModel: ObservableObject {
 
     /// 現在のタスク一覧から推薦を再計算する
     func updateRecommendation() {
+        let currentDate = now()
+
+        // 時間が過ぎたものと、なくなったタスクの「今はやらない」を外す
+        let taskIDs = Set(tasks.map(\.id))
+        let activeSkips = skippedUntil.filter { taskIDs.contains($0.key) && $0.value > currentDate }
+        if activeSkips.count != skippedUntil.count {
+            skippedUntil = activeSkips
+            saveSkippedUntil()
+        }
+
         let context = DecisionContext(
             availableMinutes: availableMinutes,
-            currentDate: now()
+            currentDate: currentDate,
+            skippedTaskIDs: Set(skippedUntil.keys)
         )
 
         recommendation = decisionEngine.recommend(
