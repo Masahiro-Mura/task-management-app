@@ -15,10 +15,10 @@
 TaskFlow/
   App/          TaskFlowApp.swift（エントリポイント）
   Models/       TaskItem, TaskPriority, DecisionContext
-  Services/     DecisionEngine（推薦ロジック）, PrerequisiteRules（前提に選べるタスク）, TaskSplitter（分解）, QuickAddParser（1行追加の読み取り）。いずれもUIに依存しない純粋なロジック
+  Services/     DecisionEngine（推薦ロジック）, PrerequisiteRules（前提に選べるタスク）, TaskSplitter（分解）, QuickAddParser（1行追加の読み取り）, CompletionMessages（完了のひとこと）。いずれもUIに依存しない純粋なロジック
   ViewModels/   HomeViewModel（タスク一覧・保存・推薦の更新）
-  Views/        ContentView(ホーム), AddTaskView, EditTaskView, AllTasksView, SplitTaskView, FocusView（集中画面）
-  Components/   TaskRowView
+  Views/        ContentView(ホーム), AddTaskView, EditTaskView, AllTasksView, SplitTaskView, FocusView（集中画面）, DoneTodayView（今日やったこと）
+  Components/   TaskRowView, CelebrationView（完了のお祝い）
 TaskFlowTests/      ロジックの単体テスト
 TaskFlowUITests/    UIテスト
 ```
@@ -57,7 +57,8 @@ UIの見た目の確認はXcodeのPreview/シミュレータで人が行う。�
 - 空き時間に入らないものを隠さず、正直に示す
 - 期限切れや溜まったタスクで責めない（放置タスクは冬眠させる等）
 - 着手しやすさ（大きいタスクを小さく分解、"今やる1つ"）
-- MCP/AIエージェント連携は当面やらない（後回し）
+- MCP/AIエージェント連携は当面やらない（後回し）。端末内のAIで分解の候補を出すのは可（非対応機種でも動くこと）
+- 連続日数・ポイント・赤いバッジなど、途切れたときに罪悪感を生む仕組みは入れない
 
 ## 既知の課題と改修計画
 

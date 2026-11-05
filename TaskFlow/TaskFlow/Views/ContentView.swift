@@ -9,6 +9,19 @@ struct ContentView: View {
     @State private var isTodayExpanded = false
     @State private var editingTaskID: UUID?
     @State private var quickAddText = ""
+    @State private var ignoredQuickAddParts: Set<QuickAddParser.Part> = []
+    @State private var celebration: Celebration?
+    @State private var isShowingDoneToday = false
+
+    /// 完了した瞬間に出すお祝いの表示
+    private struct Celebration: Identifiable, Equatable {
+        let id = UUID()
+        let message: String
+        let showsConfetti: Bool
+    }
+
+    /// お祝いを出しておく時間
+    private let celebrationDuration: Duration = .seconds(1.6)
 
     /// 推薦を計算し直す間隔。期限までの残り時間などを時間経過に合わせて更新する
     private let refreshInterval: Duration = .seconds(60)
@@ -37,9 +50,24 @@ struct ContentView: View {
                         .animation(.easeInOut(duration: 0.25), value: viewModel.recommendation?.task.id)
 
                         todaySection
+
+                        doneTodayRow
                     }
                 }
                 .padding()
+            }
+            .overlay {
+                if let celebration {
+                    CelebrationView(
+                        message: celebration.message,
+                        showsConfetti: celebration.showsConfetti
+                    )
+                    .id(celebration.id)
+                    .transition(.opacity)
+                }
+            }
+            .sensoryFeedback(.success, trigger: celebration?.id) { _, newValue in
+                newValue != nil
             }
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 8) {
@@ -123,6 +151,30 @@ struct ContentView: View {
                 while !Task.isCancelled {
                     try? await Task.sleep(for: refreshInterval)
                     viewModel.updateRecommendation()
+                }
+            }
+            .onChange(of: viewModel.lastCompletedTask?.id) { _, newValue in
+                guard newValue != nil, let task = viewModel.lastCompletedTask else {
+                    return
+                }
+
+                let finishedGroup = viewModel.finishedWholeSplitGroup(of: task)
+                celebration = Celebration(
+                    message: CompletionMessages.message(for: task, finishedGroup: finishedGroup),
+                    showsConfetti: finishedGroup
+                )
+            }
+            .task(id: celebration?.id) {
+                guard celebration != nil else {
+                    return
+                }
+
+                try? await Task.sleep(for: celebrationDuration)
+
+                if !Task.isCancelled {
+                    withAnimation(.easeOut(duration: 0.3)) {
+                        celebration = nil
+                    }
                 }
             }
             .task(id: viewModel.lastCompletedTask?.id) {
@@ -283,6 +335,10 @@ struct ContentView: View {
                     Text("「今はやらない」にしたタスクが\(summary.skippedCount)件あります（1時間たつと戻ります）")
                 }
 
+                if summary.scheduledLaterCount > 0 {
+                    Text("明日以降に予定しているタスクが\(summary.scheduledLaterCount)件あります（その日になったら出てきます）")
+                }
+
                 if summary.dormantCount > 0 {
                     Text("冬眠中のタスクが\(summary.dormantCount)件あります（「すべてのタスク」から起こせます）")
                 }
@@ -361,9 +417,107 @@ struct ContentView: View {
         }
     }
 
+    // MARK: - 今日やったこと
+
+    @ViewBuilder
+    private var doneTodayRow: some View {
+        let done = viewModel.completedToday
+
+        if !done.isEmpty {
+            let totalMinutes = done.reduce(0) { $0 + $1.estimatedMinutes }
+
+            Button {
+                isShowingDoneToday = true
+            } label: {
+                HStack {
+                    Label(
+                        "今日やったこと \(done.count)件・約\(DoneTodayView.formatMinutes(totalMinutes))",
+                        systemImage: "checkmark.seal"
+                    )
+                    .font(.subheadline)
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.green)
+            .padding()
+            .background(.green.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
+            .sheet(isPresented: $isShowingDoneToday) {
+                DoneTodayView(tasks: viewModel.completedToday)
+            }
+        }
+    }
+
     // MARK: - 下部の入力欄
 
     private var quickAddBar: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            quickAddChips
+
+            quickAddField
+        }
+    }
+
+    /// 入力を読み取った結果。タップすると、その読み取りを外して文字のままタイトルに残す
+    @ViewBuilder
+    private var quickAddChips: some View {
+        if let full = viewModel.previewQuickAdd(quickAddText) {
+            let when = full.deadline.map { ("期限 " + viewModel.describeQuickAddDate($0, includesTime: full.includesTime), "flag") }
+                ?? full.scheduledDate.map { (viewModel.describeQuickAddDate($0, includesTime: full.includesTime), "calendar") }
+
+            if when != nil || full.durationWasWritten {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        if let when {
+                            quickAddChip(when.0, systemImage: when.1, part: .when)
+                        }
+
+                        if full.durationWasWritten {
+                            quickAddChip("\(full.estimatedMinutes)分", systemImage: "clock", part: .duration)
+                        }
+                    }
+                }
+                .transition(.opacity)
+            }
+        }
+    }
+
+    private func quickAddChip(
+        _ text: String,
+        systemImage: String,
+        part: QuickAddParser.Part
+    ) -> some View {
+        let isIgnored = ignoredQuickAddParts.contains(part)
+
+        return Button {
+            if isIgnored {
+                ignoredQuickAddParts.remove(part)
+            } else {
+                ignoredQuickAddParts.insert(part)
+            }
+        } label: {
+            Label(text, systemImage: isIgnored ? "xmark" : systemImage)
+                .font(.footnote)
+                .strikethrough(isIgnored)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .foregroundStyle(isIgnored ? Color.secondary : Color.blue)
+                .background(
+                    (isIgnored ? Color.secondary : Color.blue).opacity(0.12),
+                    in: Capsule()
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint(isIgnored ? "タップするとまた読み取ります" : "タップすると読み取らずに文字のまま残します")
+    }
+
+    private var quickAddField: some View {
         HStack(spacing: 8) {
             Image(systemName: "plus.circle.fill")
                 .foregroundStyle(.secondary)
@@ -383,8 +537,9 @@ struct ContentView: View {
     }
 
     private func submitQuickAdd() {
-        if viewModel.quickAdd(quickAddText) {
+        if viewModel.quickAdd(quickAddText, ignoring: ignoredQuickAddParts) {
             quickAddText = ""
+            ignoredQuickAddParts = []
         }
     }
 

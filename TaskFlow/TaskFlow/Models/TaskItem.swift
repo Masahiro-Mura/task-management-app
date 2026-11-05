@@ -35,6 +35,12 @@ struct TaskItem: Identifiable, Equatable, Codable {
     /// 最後に追加・編集・完了切り替えなどで触れた日時。冬眠の判定に使う
     var updatedAt: Date
 
+    /// 完了にした日時。「今日やったこと」に使う。未完了ならnil
+    var completedAt: Date?
+
+    /// 「小さく分ける」で同じ元タスクから作られた部分に共通のID（元タスクのID）
+    var splitGroupID: UUID?
+
     init(
         id: UUID = UUID(),
         title: String,
@@ -44,7 +50,9 @@ struct TaskItem: Identifiable, Equatable, Codable {
         scheduledDate: Date? = nil,
         deadline: Date? = nil,
         prerequisiteIDs: [UUID] = [],
-        updatedAt: Date = Date()
+        updatedAt: Date = Date(),
+        completedAt: Date? = nil,
+        splitGroupID: UUID? = nil
     ) {
         self.id = id
         self.title = title
@@ -55,6 +63,8 @@ struct TaskItem: Identifiable, Equatable, Codable {
         self.deadline = deadline
         self.prerequisiteIDs = prerequisiteIDs
         self.updatedAt = updatedAt
+        self.completedAt = completedAt
+        self.splitGroupID = splitGroupID
     }
 
     init(from decoder: Decoder) throws {
@@ -90,6 +100,16 @@ struct TaskItem: Identifiable, Equatable, Codable {
             Date.self,
             forKey: .updatedAt
         ) ?? Date()
+
+        completedAt = try container.decodeIfPresent(
+            Date.self,
+            forKey: .completedAt
+        )
+
+        splitGroupID = try container.decodeIfPresent(
+            UUID.self,
+            forKey: .splitGroupID
+        )
     }
 }
 

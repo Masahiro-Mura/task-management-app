@@ -217,6 +217,7 @@ final class HomeViewModel: ObservableObject {
         }
 
         tasks[index].isCompleted = false
+        tasks[index].completedAt = nil
         tasks[index].updatedAt = now()
         lastCompletedTask = nil
         saveTasks()
@@ -280,11 +281,11 @@ final class HomeViewModel: ObservableObject {
     ///
     /// - Returns: 追加できたら true（タイトルが空なら false）
     @discardableResult
-    func quickAdd(_ text: String) -> Bool {
-        guard let parsed = QuickAddParser.parse(
-            text,
-            defaultMinutes: Self.defaultQuickAddMinutes
-        ) else {
+    func quickAdd(
+        _ text: String,
+        ignoring: Set<QuickAddParser.Part> = []
+    ) -> Bool {
+        guard let parsed = previewQuickAdd(text, ignoring: ignoring) else {
             return false
         }
 
@@ -292,10 +293,56 @@ final class HomeViewModel: ObservableObject {
             title: parsed.title,
             estimatedMinutes: parsed.estimatedMinutes,
             priority: .medium,
-            scheduledDate: nil,
-            deadline: nil
+            scheduledDate: parsed.scheduledDate,
+            deadline: parsed.deadline
         )
         return true
+    }
+
+    /// 1行の入力をどう読み取るか（入力欄の上に出す確認用）
+    func previewQuickAdd(
+        _ text: String,
+        ignoring: Set<QuickAddParser.Part> = []
+    ) -> QuickAddParser.Result? {
+        QuickAddParser.parse(
+            text,
+            defaultMinutes: Self.defaultQuickAddMinutes,
+            now: now(),
+            calendar: calendar,
+            ignoring: ignoring
+        )
+    }
+
+    /// 読み取った日付の短い表示（「明日 15:00」など）
+    func describeQuickAddDate(_ date: Date, includesTime: Bool) -> String {
+        QuickAddParser.describe(date, includesTime: includesTime, now: now(), calendar: calendar)
+    }
+
+    // MARK: - 今日やったこと
+
+    /// 今日完了にしたタスク（完了した順）
+    var completedToday: [TaskItem] {
+        let currentDate = now()
+
+        return tasks
+            .filter { task in
+                guard task.isCompleted, let completedAt = task.completedAt else {
+                    return false
+                }
+                return calendar.isDate(completedAt, inSameDayAs: currentDate)
+            }
+            .sorted { ($0.completedAt ?? .distantPast) < ($1.completedAt ?? .distantPast) }
+    }
+
+    /// 分けたタスクのうち、同じ元タスクから作られたものが全部終わったか
+    func finishedWholeSplitGroup(of task: TaskItem) -> Bool {
+        guard let groupID = task.splitGroupID else {
+            return false
+        }
+
+        return tasks
+            .filter { $0.splitGroupID == groupID }
+            .allSatisfy(\.isCompleted)
     }
 
     private func complete(_ task: TaskItem) {
@@ -306,6 +353,7 @@ final class HomeViewModel: ObservableObject {
 
         lastCompletedTask = tasks[index]
         tasks[index].isCompleted = true
+        tasks[index].completedAt = now()
         tasks[index].updatedAt = now()
         skippedUntil[task.id] = nil
         saveTasks()
@@ -359,6 +407,7 @@ final class HomeViewModel: ObservableObject {
         }
 
         tasks[index].isCompleted.toggle()
+        tasks[index].completedAt = tasks[index].isCompleted ? now() : nil
         tasks[index].updatedAt = now()
         saveTasks()
         updateRecommendation()
@@ -481,7 +530,8 @@ final class HomeViewModel: ObservableObject {
         let context = DecisionContext(
             availableMinutes: availableMinutes,
             currentDate: currentDate,
-            skippedTaskIDs: Set(skippedUntil.keys)
+            skippedTaskIDs: Set(skippedUntil.keys),
+            calendar: calendar
         )
 
         recommendation = decisionEngine.recommend(

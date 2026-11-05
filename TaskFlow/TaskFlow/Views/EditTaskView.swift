@@ -102,7 +102,7 @@ struct EditTaskView: View {
                     DatePicker(
                         "日付",
                         selection: $scheduledDate,
-                        displayedComponents: .date
+                        displayedComponents: [.date, .hourAndMinute]
                     )
                 }
             }
@@ -191,7 +191,9 @@ struct EditTaskView: View {
                         // 一覧の順に並べ、選べなくなった前提（削除・循環）は外す
                         prerequisiteIDs: selectablePrerequisites
                             .map(\.id)
-                            .filter { prerequisiteIDs.contains($0) }
+                            .filter { prerequisiteIDs.contains($0) },
+                        completedAt: task.completedAt,
+                        splitGroupID: task.splitGroupID
                     )
                     
                     onSave(updatedTask)

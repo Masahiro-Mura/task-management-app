@@ -49,7 +49,7 @@ struct AddTaskView: View {
                         DatePicker(
                             "実施予定日",
                             selection: $scheduledDate,
-                            displayedComponents: [.date]
+                            displayedComponents: [.date, .hourAndMinute]
                         )
                     }
                 }

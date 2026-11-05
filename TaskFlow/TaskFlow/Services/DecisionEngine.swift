@@ -45,6 +45,9 @@ struct NoRecommendationSummary: Equatable {
     /// 「今はやらない」で一時的に外しているタスク数
     var skippedCount: Int = 0
 
+    /// 予定日が明日以降のタスク数
+    var scheduledLaterCount: Int = 0
+
     var allCompleted: Bool {
         incompleteCount == 0 && dormantCount == 0
     }
@@ -74,6 +77,7 @@ struct DecisionEngine {
         let candidates = tasks
             .filter { !$0.isDormant(at: context.currentDate) }
             .filter { !context.skippedTaskIDs.contains($0.id) }
+            .filter { !context.isScheduledLater($0) }
             .filter { task in
                 isExecutable(
                     task,
@@ -137,12 +141,15 @@ struct DecisionEngine {
         }
 
         var skippedCount = 0
+        var scheduledLaterCount = 0
         var waitingCount = 0
         var tooLongMinutes: [Int] = []
 
         for task in activeTasks {
             if context.skippedTaskIDs.contains(task.id) {
                 skippedCount += 1
+            } else if context.isScheduledLater(task) {
+                scheduledLaterCount += 1
             } else if !prerequisitesAreCompleted(task, incompleteTaskIDs: incompleteTaskIDs) {
                 waitingCount += 1
             } else if task.estimatedMinutes > context.availableMinutes {
@@ -156,7 +163,8 @@ struct DecisionEngine {
             waitingForPrerequisitesCount: waitingCount,
             tooLongCount: tooLongMinutes.count,
             shortestTooLongMinutes: tooLongMinutes.min(),
-            skippedCount: skippedCount
+            skippedCount: skippedCount,
+            scheduledLaterCount: scheduledLaterCount
         )
     }
 

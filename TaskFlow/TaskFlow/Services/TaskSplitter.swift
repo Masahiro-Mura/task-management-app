@@ -63,7 +63,9 @@ enum TaskSplitter {
                     scheduledDate: task.scheduledDate,
                     deadline: task.deadline,
                     prerequisiteIDs: previousID.map { [$0] } ?? task.prerequisiteIDs,
-                    updatedAt: now
+                    updatedAt: now,
+                    // 分けたものをさらに分けても、最初の元タスクでまとまるようにする
+                    splitGroupID: task.splitGroupID ?? task.id
                 )
             )
         }
