@@ -13,6 +13,7 @@ struct ContentView: View {
     @State private var celebration: Celebration?
     @State private var isShowingDoneToday = false
     @State private var isShowingCarryOver = false
+    @State private var firstStepTask: TaskItem?
 
     /// 完了した瞬間に出すお祝いの表示
     private struct Celebration: Identifiable, Equatable {
@@ -41,6 +42,11 @@ struct ContentView: View {
 
                         if viewModel.isOfferingLightMode {
                             lightModeOffer
+                                .transition(.opacity)
+                        }
+
+                        if let candidate = viewModel.nextStepCandidate {
+                            nextStepOffer(for: candidate)
                                 .transition(.opacity)
                         }
 
@@ -133,6 +139,11 @@ struct ContentView: View {
                     )
                 }
             }
+            .sheet(item: $firstStepTask) { task in
+                FirstStepView(task: task) { title, minutes in
+                    viewModel.addFirstStep(for: task, title: title, minutes: minutes)
+                }
+            }
             .fullScreenCover(
                 isPresented: Binding(
                     get: { viewModel.focusSession != nil },
@@ -148,11 +159,15 @@ struct ContentView: View {
                     FocusView(
                         task: task,
                         startedAt: session.startedAt,
+                        trialMinutes: session.trialMinutes,
                         onComplete: {
                             viewModel.finishFocus(completing: true)
                         },
                         onStop: {
                             viewModel.finishFocus(completing: false)
+                        },
+                        onContinue: {
+                            viewModel.continueFocus()
                         }
                     )
                 }
@@ -309,6 +324,11 @@ struct ContentView: View {
             }
             .buttonStyle(.bordered)
             .controlSize(.large)
+
+            // 大きいタスクは、全部やらなくても手をつけられる入り口を添える
+            if task.estimatedMinutes >= Self.bigTaskMinutes {
+                bigTaskShortcuts(for: task)
+            }
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -384,6 +404,18 @@ struct ContentView: View {
                 }
                 .buttonStyle(.bordered)
                 .padding(.top, 4)
+
+                // 時間に収まらなくても、最初の一歩か5分だけなら始められる
+                if let taskID = summary.shortestTooLongTaskID,
+                   let task = viewModel.tasks.first(where: { $0.id == taskID }) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("「\(task.title)」なら、こうして始められます")
+                            .foregroundStyle(.secondary)
+
+                        bigTaskShortcuts(for: task)
+                    }
+                    .padding(.top, 6)
+                }
             }
         }
         .font(.subheadline)
@@ -639,6 +671,9 @@ struct ContentView: View {
             },
             onReschedule: { ids, option in
                 viewModel.reschedule(ids, to: option)
+            },
+            onAddFirstStep: { task, title, minutes in
+                viewModel.addFirstStep(for: task, title: title, minutes: minutes)
             }
         )
     }
@@ -655,8 +690,65 @@ struct ContentView: View {
             },
             onLowerPriority: { taskID in
                 viewModel.lowerPriority(of: taskID)
+            },
+            onAddFirstStep: { title, minutes in
+                viewModel.addFirstStep(for: task, title: title, minutes: minutes)
             }
         )
+    }
+
+    // MARK: - 大きいタスクの入り口
+
+    /// この所要時間以上のタスクには、「5分だけ」「最初の一歩」を添える
+    private static let bigTaskMinutes = 30
+
+    private func bigTaskShortcuts(for task: TaskItem) -> some View {
+        HStack(spacing: 16) {
+            Button {
+                viewModel.startFocus(on: task.id, trialMinutes: HomeViewModel.trialFocusMinutes)
+            } label: {
+                Label("\(HomeViewModel.trialFocusMinutes)分だけやる", systemImage: "timer")
+            }
+
+            Button {
+                firstStepTask = task
+            } label: {
+                Label("最初の一歩を決める", systemImage: "shoeprints.fill")
+            }
+        }
+        .font(.subheadline)
+        .buttonStyle(.borderless)
+    }
+
+    /// 一歩を終えたあとに出す「次の一歩を決めますか？」
+    private func nextStepOffer(for task: TaskItem) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "shoeprints.fill")
+                .foregroundStyle(.blue)
+
+            Text("「\(CompletionMessages.baseTitle(of: task.title))」の次の一歩を決めますか？")
+                .font(.subheadline)
+
+            Spacer(minLength: 0)
+
+            Button("決める") {
+                firstStepTask = task
+                viewModel.dismissNextStepOffer()
+            }
+            .font(.subheadline)
+            .fontWeight(.semibold)
+
+            Button {
+                viewModel.dismissNextStepOffer()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            .accessibilityLabel("閉じる")
+        }
+        .padding(12)
+        .background(.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
     }
 
     // MARK: - 気が乗らないとき

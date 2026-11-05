@@ -356,7 +356,8 @@ struct DecisionEngineTests {
             dormantCount: 0,
             waitingForPrerequisitesCount: 1,
             tooLongCount: 2,
-            shortestTooLongMinutes: 60
+            shortestTooLongMinutes: 60,
+            shortestTooLongTaskID: slides.id
         ))
         #expect(!summary.allCompleted)
     }

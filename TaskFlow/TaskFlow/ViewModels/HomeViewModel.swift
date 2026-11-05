@@ -22,7 +22,19 @@ final class HomeViewModel: ObservableObject {
     struct FocusSession: Equatable {
         let taskID: UUID
         let startedAt: Date
+
+        /// 「5分だけやる」のときの目安（分）。nilならタスクの所要時間が目安
+        var trialMinutes: Int?
     }
+
+    /// 「5分だけやる」の時間（分）
+    nonisolated static let trialFocusMinutes = 5
+
+    /// 「最初の一歩」の所要時間の初期値（分）
+    nonisolated static let defaultFirstStepMinutes = 10
+
+    /// 一歩を終えたあとに「次の一歩を決めますか？」と聞く元のタスク
+    @Published private(set) var nextStepCandidate: TaskItem?
 
     /// 「今はやらない」にしたタスクと、推薦に戻る日時
     private var skippedUntil: [UUID: Date] = [:]
@@ -247,6 +259,7 @@ final class HomeViewModel: ObservableObject {
         tasks[index].completedAt = nil
         tasks[index].updatedAt = now()
         lastCompletedTask = nil
+        nextStepCandidate = nil
         saveTasks()
         updateRecommendation()
     }
@@ -413,15 +426,25 @@ final class HomeViewModel: ObservableObject {
     }
 
     /// 推薦中のタスクに集中して取りかかる
-    func startFocus() {
-        guard let task = recommendation?.task,
-              let index = tasks.firstIndex(where: { $0.id == task.id }) else {
+    ///
+    /// - Parameters:
+    ///   - taskID: 取りかかるタスク。nilなら推薦中のタスク
+    ///   - trialMinutes: 「5分だけやる」のときの目安。空き時間に収まらない大きいタスクでも始められる
+    func startFocus(on taskID: UUID? = nil, trialMinutes: Int? = nil) {
+        guard let id = taskID ?? recommendation?.task.id,
+              let index = tasks.firstIndex(where: { $0.id == id }),
+              !tasks[index].isCompleted else {
             return
         }
 
         tasks[index].updatedAt = now()
-        focusSession = FocusSession(taskID: task.id, startedAt: now())
+        focusSession = FocusSession(taskID: id, startedAt: now(), trialMinutes: trialMinutes)
         saveTasks()
+    }
+
+    /// 「5分だけ」のあと、そのまま続ける（目安をタスクの所要時間に戻す）
+    func continueFocus() {
+        focusSession?.trialMinutes = nil
     }
 
     /// 集中しているタスク
@@ -525,6 +548,61 @@ final class HomeViewModel: ObservableObject {
         saveTasks()
         saveSkippedUntil()
         updateRecommendation()
+
+        // 一歩（や分けた部分）を終えて、続きのタスクが空き時間に収まらないままなら、次の一歩を聞く
+        nextStepCandidate = task.splitGroupID.flatMap { groupID in
+            tasks.first { other in
+                !other.isCompleted
+                    && other.splitGroupID == groupID
+                    && other.prerequisiteIDs.contains(task.id)
+                    && other.estimatedMinutes > availableMinutes
+            }
+        }
+    }
+
+    // MARK: - 最初の一歩
+
+    /// 大きいタスクの「最初の一歩」を、そのタスクの前提として追加する
+    ///
+    /// 全部を分けなくても、一歩だけ決めれば推薦に出るようにする。
+    /// 一歩は「元のタスク名：一歩」という名前で、元のタスクの直前に並ぶ。
+    func addFirstStep(for task: TaskItem, title stepTitle: String, minutes: Int) {
+        let trimmed = stepTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !trimmed.isEmpty,
+              let index = tasks.firstIndex(where: { $0.id == task.id }) else {
+            return
+        }
+
+        let currentDate = now()
+        let baseTitle = CompletionMessages.baseTitle(of: tasks[index].title)
+        let groupID = tasks[index].splitGroupID ?? tasks[index].id
+
+        let step = TaskItem(
+            title: "\(baseTitle)：\(trimmed)",
+            estimatedMinutes: min(max(minutes, 5), 480),
+            priority: tasks[index].priority,
+            deadline: tasks[index].deadline,
+            // 元のタスクが待っていた前提は、一歩のほうが引き継ぐ
+            prerequisiteIDs: tasks[index].prerequisiteIDs,
+            updatedAt: currentDate,
+            splitGroupID: groupID
+        )
+
+        tasks[index].prerequisiteIDs = [step.id]
+        tasks[index].splitGroupID = groupID
+        tasks[index].updatedAt = currentDate
+        tasks.insert(step, at: index)
+
+        skippedUntil[step.id] = nil
+        nextStepCandidate = nil
+        saveTasks()
+        updateRecommendation()
+    }
+
+    /// 「次の一歩を決めますか？」を閉じる
+    func dismissNextStepOffer() {
+        nextStepCandidate = nil
     }
 
     private func loadSkippedUntil() -> [UUID: Date] {

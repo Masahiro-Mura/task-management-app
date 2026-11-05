@@ -19,6 +19,7 @@ struct AllTasksView: View {
     var onTogglePin: (TaskItem) -> Void = { _ in }
     var onLowerPriority: (UUID) -> Void = { _ in }
     var onReschedule: (Set<UUID>, HomeViewModel.RescheduleOption) -> Void = { _, _ in }
+    var onAddFirstStep: (TaskItem, String, Int) -> Void = { _, _, _ in }
 
     private func note(for task: TaskItem) -> String? {
         if dormantTaskIDs.contains(task.id) {
@@ -48,7 +49,10 @@ struct AllTasksView: View {
                     onSplit: { parts in
                         onSplit(task, parts)
                     },
-                    onLowerPriority: onLowerPriority
+                    onLowerPriority: onLowerPriority,
+                    onAddFirstStep: { title, minutes in
+                        onAddFirstStep(task, title, minutes)
+                    }
                 )
             } label: {
                 TaskRowView(

@@ -16,6 +16,7 @@ struct SplitTaskView: View {
 
     @State private var count: Int
     @State private var parts: [EditablePart]
+    @State private var isFillingSuggestions = false
 
     init(
         task: TaskItem,
@@ -38,6 +39,22 @@ struct SplitTaskView: View {
         }
     }
 
+    /// 候補の分だけ、上から順に名前を入れる（残りはそのまま）
+    private func fillWithSuggestions() {
+        isFillingSuggestions = true
+
+        Task {
+            let base = CompletionMessages.baseTitle(of: task.title)
+            let suggestions = await StepSuggester.suggestions(for: base).steps
+
+            for (index, suggestion) in suggestions.enumerated() where index < parts.count {
+                parts[index].part.title = "\(base)：\(suggestion)"
+            }
+
+            isFillingSuggestions = false
+        }
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -49,6 +66,22 @@ struct SplitTaskView: View {
                     )
                 } footer: {
                     Text("上から順に取りかかれるようになります。元のタスク「\(task.title)」（\(task.estimatedMinutes)分）は、分けたタスクに置き換わります。")
+                }
+
+                Section {
+                    Button {
+                        fillWithSuggestions()
+                    } label: {
+                        if isFillingSuggestions {
+                            HStack(spacing: 8) {
+                                ProgressView()
+                                Text("候補を考えています")
+                            }
+                        } else {
+                            Label("候補から名前を入れる", systemImage: "wand.and.stars")
+                        }
+                    }
+                    .disabled(isFillingSuggestions)
                 }
 
                 ForEach(Array($parts.enumerated()), id: \.element.id) { index, $item in

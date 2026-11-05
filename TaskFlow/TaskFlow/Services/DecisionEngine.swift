@@ -52,6 +52,9 @@ struct NoRecommendationSummary: Equatable {
     /// 予定日が明日以降のタスク数
     var scheduledLaterCount: Int = 0
 
+    /// 空き時間に収まらないタスクのうち、最も短いもの。「最初の一歩」「5分だけ」の対象にする
+    var shortestTooLongTaskID: UUID? = nil
+
     var allCompleted: Bool {
         incompleteCount == 0 && dormantCount == 0
     }
@@ -150,6 +153,7 @@ struct DecisionEngine {
         var scheduledLaterCount = 0
         var waitingCount = 0
         var tooLongMinutes: [Int] = []
+        var shortestTooLong: TaskItem?
 
         for task in activeTasks {
             if context.skippedTaskIDs.contains(task.id) {
@@ -160,6 +164,10 @@ struct DecisionEngine {
                 waitingCount += 1
             } else if task.estimatedMinutes > context.availableMinutes {
                 tooLongMinutes.append(task.estimatedMinutes)
+
+                if task.estimatedMinutes < (shortestTooLong?.estimatedMinutes ?? .max) {
+                    shortestTooLong = task
+                }
             }
         }
 
@@ -170,7 +178,8 @@ struct DecisionEngine {
             tooLongCount: tooLongMinutes.count,
             shortestTooLongMinutes: tooLongMinutes.min(),
             skippedCount: skippedCount,
-            scheduledLaterCount: scheduledLaterCount
+            scheduledLaterCount: scheduledLaterCount,
+            shortestTooLongTaskID: shortestTooLong?.id
         )
     }
 

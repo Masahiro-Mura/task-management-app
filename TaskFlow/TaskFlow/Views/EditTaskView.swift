@@ -8,6 +8,7 @@ struct EditTaskView: View {
     let onSave: (TaskItem) -> Void
     let onSplit: ([TaskSplitPart]) -> Void
     let onLowerPriority: (UUID) -> Void
+    let onAddFirstStep: (String, Int) -> Void
 
     /// 前提として選べるタスク（自分自身と、循環するものを除く）
     private let selectablePrerequisites: [TaskItem]
@@ -24,6 +25,7 @@ struct EditTaskView: View {
     @State private var hasDeadline: Bool
     @State private var prerequisiteIDs: Set<UUID>
     @State private var isShowingSplit = false
+    @State private var isShowingFirstStep = false
     @State private var lowering: UUID?
     @State private var isLight: Bool
     @State private var isPinnedForToday: Bool
@@ -39,12 +41,14 @@ struct EditTaskView: View {
         allTasks: [TaskItem],
         onSave: @escaping (TaskItem) -> Void = { _ in },
         onSplit: @escaping ([TaskSplitPart]) -> Void = { _ in },
-        onLowerPriority: @escaping (UUID) -> Void = { _ in }
+        onLowerPriority: @escaping (UUID) -> Void = { _ in },
+        onAddFirstStep: @escaping (String, Int) -> Void = { _, _ in }
     ) {
         self.task = task
         self.onSave = onSave
         self.onSplit = onSplit
         self.onLowerPriority = onLowerPriority
+        self.onAddFirstStep = onAddFirstStep
         self.selectablePrerequisites = PrerequisiteRules.selectablePrerequisites(
             for: task,
             in: allTasks
@@ -172,15 +176,24 @@ struct EditTaskView: View {
 
             if !task.isCompleted {
                 Section {
+                    Button("最初の一歩を決める") {
+                        isShowingFirstStep = true
+                    }
+
                     Button("小さく分ける") {
                         isShowingSplit = true
                     }
                 } footer: {
-                    Text("空き時間に収まらない大きいタスクは、順番に取りかかれる小さいタスクに分けられます。")
+                    Text("全部を分けるのが面倒なら、最初の一歩だけ決めれば大丈夫です。全体を順番に分けたいときは「小さく分ける」。")
                 }
             }
         }
         .navigationTitle("タスク編集")
+        .sheet(isPresented: $isShowingFirstStep) {
+            FirstStepView(task: task) { title, minutes in
+                onAddFirstStep(title, minutes)
+            }
+        }
         .sheet(
             isPresented: $isShowingSplit,
             onDismiss: {

@@ -1,51 +1,102 @@
 import SwiftUI
 
 /// 推薦されたタスク1つに集中する画面。経過時間と「完了」だけを出す
+///
+/// 「5分だけやる」のときは5分を目安にし、5分たったら続けるか、ここまでにするかを選べる。
 struct FocusView: View {
 
     let task: TaskItem
     let startedAt: Date
+
+    /// 「5分だけやる」のときの目安（分）。nilならタスクの所要時間
+    var trialMinutes: Int? = nil
+
     let onComplete: () -> Void
     let onStop: () -> Void
+    var onContinue: () -> Void = {}
+
+    private var targetMinutes: Int {
+        trialMinutes ?? task.estimatedMinutes
+    }
 
     var body: some View {
-        VStack(spacing: 32) {
-            Spacer()
+        TimelineView(.periodic(from: startedAt, by: 1)) { context in
+            let elapsed = max(context.date.timeIntervalSince(startedAt), 0)
+            let reachedTarget = elapsed >= TimeInterval(targetMinutes * 60)
 
-            VStack(spacing: 12) {
-                Text("取りかかり中")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+            VStack(spacing: 32) {
+                Spacer()
 
-                Text(task.title)
-                    .font(.title)
-                    .fontWeight(.semibold)
-                    .multilineTextAlignment(.center)
-            }
+                VStack(spacing: 12) {
+                    Text(trialMinutes == nil ? "取りかかり中" : "まずは\(targetMinutes)分だけ")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
 
-            TimelineView(.periodic(from: startedAt, by: 1)) { context in
-                let elapsed = max(context.date.timeIntervalSince(startedAt), 0)
+                    Text(task.title)
+                        .font(.title)
+                        .fontWeight(.semibold)
+                        .multilineTextAlignment(.center)
+                }
 
                 VStack(spacing: 8) {
                     Text(Self.format(elapsed))
                         .font(.system(size: 64, weight: .light, design: .rounded))
                         .monospacedDigit()
 
-                    // 目安を過ぎても責めず、区切りをつけてよいことだけを伝える
-                    Text(
-                        elapsed > TimeInterval(task.estimatedMinutes * 60)
-                            ? "目安の\(task.estimatedMinutes)分を過ぎました。区切りのいいところで終えて大丈夫です"
-                            : "目安 \(task.estimatedMinutes)分"
-                    )
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
+                    Text(statusText(reachedTarget: reachedTarget))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
                 }
+
+                Spacer()
+
+                actions(reachedTarget: reachedTarget)
             }
+            .padding(24)
+            .animation(.easeInOut, value: reachedTarget)
+        }
+    }
 
-            Spacer()
+    /// 目安を過ぎても責めず、区切りをつけてよいことだけを伝える
+    private func statusText(reachedTarget: Bool) -> String {
+        switch (trialMinutes, reachedTarget) {
+        case (nil, false):
+            return "目安 \(targetMinutes)分"
+        case (nil, true):
+            return "目安の\(targetMinutes)分を過ぎました。区切りのいいところで終えて大丈夫です"
+        case (_?, false):
+            return "\(targetMinutes)分たったら、続けるかどうか選べます"
+        case (_?, true):
+            return "\(targetMinutes)分、手をつけられました。続けますか？"
+        }
+    }
 
-            VStack(spacing: 12) {
+    @ViewBuilder
+    private func actions(reachedTarget: Bool) -> some View {
+        VStack(spacing: 12) {
+            if trialMinutes != nil, reachedTarget {
+                Button(action: onContinue) {
+                    Label("続ける", systemImage: "play.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+
+                HStack(spacing: 12) {
+                    Button(action: onStop) {
+                        Text("ここまでにする")
+                            .frame(maxWidth: .infinity)
+                    }
+
+                    Button(action: onComplete) {
+                        Label("完了", systemImage: "checkmark")
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+            } else {
                 Button(action: onComplete) {
                     Label("完了", systemImage: "checkmark")
                         .frame(maxWidth: .infinity)
@@ -57,7 +108,6 @@ struct FocusView: View {
                     .controlSize(.large)
             }
         }
-        .padding(24)
     }
 
     /// 経過時間を「12:34」や「1:02:03」の形にする
@@ -77,8 +127,9 @@ struct FocusView: View {
 
 #Preview {
     FocusView(
-        task: TaskItem(title: "発表資料を作る（1/3）", estimatedMinutes: 30),
-        startedAt: Date().addingTimeInterval(-754),
+        task: TaskItem(title: "部屋を片づける", estimatedMinutes: 90),
+        startedAt: Date().addingTimeInterval(-301),
+        trialMinutes: 5,
         onComplete: {},
         onStop: {}
     )
