@@ -31,8 +31,12 @@ struct TaskRowView: View {
                 .foregroundStyle(
                     task.isCompleted ? .green : .secondary
                 )
+                .font(.title3)
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(task.isCompleted ? "「\(task.title)」を未完了に戻す" : "「\(task.title)」を完了にする")
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(task.title)
@@ -48,6 +52,7 @@ struct TaskRowView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             }
+            .accessibilityElement(children: .combine)
 
             Spacer()
         }

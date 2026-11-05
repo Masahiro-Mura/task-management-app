@@ -8,12 +8,15 @@ struct CelebrationView: View {
     /// 分けたタスクが全部終わったときなど、大きい区切りだけ紙吹雪を出す
     let showsConfetti: Bool
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     @State private var progress: CGFloat = 0
     @State private var isVisible = false
 
     var body: some View {
         ZStack {
-            if showsConfetti {
+            // 動きを減らす設定のときは、紙吹雪を出さない
+            if showsConfetti, !reduceMotion {
                 ConfettiView()
             }
 
@@ -46,12 +49,20 @@ struct CelebrationView: View {
         }
         .allowsHitTesting(false)
         .onAppear {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+            if reduceMotion {
                 isVisible = true
-            }
-            withAnimation(.easeOut(duration: 0.5).delay(0.1)) {
                 progress = 1
+            } else {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+                    isVisible = true
+                }
+                withAnimation(.easeOut(duration: 0.5).delay(0.1)) {
+                    progress = 1
+                }
             }
+
+            // 読み上げを使っている人にも、終わったことを伝える
+            AccessibilityNotification.Announcement(message).post()
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(message)

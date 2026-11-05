@@ -15,6 +15,9 @@ struct FocusView: View {
     let onStop: () -> Void
     var onContinue: () -> Void = {}
 
+    /// 文字の大きさの設定に合わせて、経過時間の数字も大きくする
+    @ScaledMetric(relativeTo: .largeTitle) private var timerSize: CGFloat = 64
+
     private var targetMinutes: Int {
         trialMinutes ?? task.estimatedMinutes
     }
@@ -40,8 +43,11 @@ struct FocusView: View {
 
                 VStack(spacing: 8) {
                     Text(Self.format(elapsed))
-                        .font(.system(size: 64, weight: .light, design: .rounded))
+                        .font(.system(size: timerSize, weight: .light, design: .rounded))
                         .monospacedDigit()
+                        .minimumScaleFactor(0.5)
+                        .lineLimit(1)
+                        .accessibilityLabel("経過時間 \(Int(elapsed) / 60)分\(Int(elapsed) % 60)秒")
 
                     Text(statusText(reachedTarget: reachedTarget))
                         .font(.subheadline)

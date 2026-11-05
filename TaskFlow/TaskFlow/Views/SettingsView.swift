@@ -1,9 +1,20 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// 設定。通知は最小限で、アイコンの赤い数字は出さない
 struct SettingsView: View {
 
     @ObservedObject var viewModel: HomeViewModel
+
+    @State private var isImporting = false
+    @State private var importMessage: String?
+
+    private var appVersion: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "-"
+        let build = info?["CFBundleVersion"] as? String ?? "-"
+        return "\(version)（\(build)）"
+    }
 
     var body: some View {
         Form {
@@ -70,8 +81,74 @@ struct SettingsView: View {
             } footer: {
                 Text("完了して\(HomeViewModel.completedHideDays)日たったものは一覧から隠れます（消えません）。\(HomeViewModel.letGoDormantDays)日以上冬眠しているものは、月に1回「手放しますか？」と聞きます。手放したものはここに保管されます。")
             }
+
+            Section {
+                ShareLink(
+                    item: BackupExport(data: viewModel.makeBackup(), fileName: viewModel.backupFileName),
+                    preview: SharePreview(viewModel.backupFileName)
+                ) {
+                    Label("データを書き出す", systemImage: "square.and.arrow.up")
+                }
+
+                Button {
+                    isImporting = true
+                } label: {
+                    Label("書き出したデータを読み込む", systemImage: "square.and.arrow.down")
+                }
+            } header: {
+                Text("データ")
+            } footer: {
+                Text("書き出したファイルは、機種変更やもしものときの控えに使えます。読み込みでは、今あるタスクは消さず、まだないものだけを足します。")
+            }
+
+            Section {
+                Button("使い方をもう一度見る") {
+                    viewModel.showOnboardingAgain()
+                }
+
+                LabeledContent("バージョン", value: appVersion)
+            }
         }
         .navigationTitle("設定")
+        .fileImporter(isPresented: $isImporting, allowedContentTypes: [.json]) { result in
+            importMessage = Self.importBackup(result, into: viewModel)
+        }
+        .alert(
+            "読み込み",
+            isPresented: Binding(
+                get: { importMessage != nil },
+                set: { if !$0 { importMessage = nil } }
+            )
+        ) {
+            Button("OK") {
+                importMessage = nil
+            }
+        } message: {
+            Text(importMessage ?? "")
+        }
+    }
+
+    /// 選んだファイルを読み込んで、結果の文を返す
+    private static func importBackup(
+        _ result: Result<URL, Error>,
+        into viewModel: HomeViewModel
+    ) -> String {
+        do {
+            let url = try result.get()
+            let isScoped = url.startAccessingSecurityScopedResource()
+            defer {
+                if isScoped {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
+
+            let summary = try viewModel.importBackup(Data(contentsOf: url))
+            return summary.total == 0
+                ? "新しく足すものはありませんでした。"
+                : "タスク\(summary.addedTasks)件、くり返し\(summary.addedRecurringTasks)件、保管\(summary.addedArchivedTasks)件を足しました。"
+        } catch {
+            return (error as? LocalizedError)?.errorDescription ?? "読み込めませんでした。"
+        }
     }
 
     private static func date(fromMinutes minutes: Int) -> Date {

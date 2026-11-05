@@ -32,6 +32,9 @@ struct ContentView: View {
     /// 完了後に「元に戻す」を出しておく時間
     private let undoDuration: Duration = .seconds(5)
 
+    /// 広い画面での中身の最大の幅
+    private static let readableWidth: CGFloat = 640
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -74,6 +77,9 @@ struct ContentView: View {
                     }
                 }
                 .padding()
+                // iPad や Mac の広い画面でも、読みやすい幅で中央に置く
+                .frame(maxWidth: Self.readableWidth)
+                .frame(maxWidth: .infinity)
             }
             .overlay {
                 if let celebration {
@@ -99,6 +105,8 @@ struct ContentView: View {
                 }
                 .padding(.horizontal)
                 .padding(.bottom, 8)
+                .frame(maxWidth: Self.readableWidth)
+                .frame(maxWidth: .infinity)
                 .animation(.easeInOut(duration: 0.2), value: viewModel.lastCompletedTask?.id)
             }
             .navigationTitle("今やること")
@@ -128,6 +136,7 @@ struct ContentView: View {
                         Image(systemName: "plus")
                     }
                     .accessibilityLabel("詳しく入れて追加")
+                    .keyboardShortcut("n", modifiers: .command)
                 }
             }
             .navigationDestination(item: $editingTaskID) { taskID in
@@ -200,6 +209,20 @@ struct ContentView: View {
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .active {
                     viewModel.appDidBecomeActive()
+                }
+            }
+            .fullScreenCover(
+                isPresented: Binding(
+                    get: { viewModel.needsOnboarding },
+                    set: { isPresented in
+                        if !isPresented {
+                            viewModel.finishOnboarding(addExamples: false)
+                        }
+                    }
+                )
+            ) {
+                OnboardingView { addExamples in
+                    viewModel.finishOnboarding(addExamples: addExamples)
                 }
             }
             .sheet(isPresented: $isShowingLetGo) {
@@ -342,6 +365,7 @@ struct ContentView: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
+            .keyboardShortcut(.return, modifiers: .command)
 
             HStack(spacing: 12) {
                 Button {
@@ -350,6 +374,7 @@ struct ContentView: View {
                     Label("完了", systemImage: "checkmark")
                         .frame(maxWidth: .infinity)
                 }
+                .keyboardShortcut("d", modifiers: .command)
 
                 Button {
                     viewModel.skipRecommendation()
@@ -357,6 +382,7 @@ struct ContentView: View {
                     Text("今はやらない")
                         .frame(maxWidth: .infinity)
                 }
+                .keyboardShortcut("l", modifiers: .command)
             }
             .buttonStyle(.bordered)
             .controlSize(.large)

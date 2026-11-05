@@ -296,6 +296,97 @@ final class HomeViewModel: ObservableObject {
         userDefaults.set(data, forKey: archivedStorageKey)
     }
 
+    // MARK: - 書き出し・読み込み
+
+    /// すべてのタスク・くり返し・保管を、JSONで書き出す
+    func makeBackup() -> Data {
+        let backup = BackupFile(
+            version: BackupFile.currentVersion,
+            exportedAt: now(),
+            tasks: tasks,
+            recurringTasks: recurringTasks,
+            archivedTasks: archivedTasks
+        )
+        return (try? BackupFile.encoder().encode(backup)) ?? Data()
+    }
+
+    /// 書き出したファイルの名前（「TaskFlow-2026-11-05.json」）
+    var backupFileName: String {
+        let components = calendar.dateComponents([.year, .month, .day], from: now())
+        return String(
+            format: "TaskFlow-%04d-%02d-%02d.json",
+            components.year ?? 0,
+            components.month ?? 0,
+            components.day ?? 0
+        )
+    }
+
+    /// 書き出したファイルを読み込む。今あるものは消さず、まだないもの（IDで判断）だけを足す
+    @discardableResult
+    func importBackup(_ data: Data) throws -> BackupImportSummary {
+        guard let backup = try? BackupFile.decoder().decode(BackupFile.self, from: data) else {
+            throw BackupError.unreadable
+        }
+
+        guard backup.version <= BackupFile.currentVersion else {
+            throw BackupError.newerVersion
+        }
+
+        let existingTaskIDs = Set(tasks.map(\.id)).union(archivedTasks.map(\.id))
+        let newTasks = backup.tasks.filter { !existingTaskIDs.contains($0.id) }
+        let newArchived = backup.archivedTasks.filter { !existingTaskIDs.contains($0.id) }
+
+        let existingRecurringIDs = Set(recurringTasks.map(\.id))
+        let newRecurring = backup.recurringTasks.filter { !existingRecurringIDs.contains($0.id) }
+
+        tasks.append(contentsOf: newTasks)
+        archivedTasks.append(contentsOf: newArchived)
+        recurringTasks.append(contentsOf: newRecurring)
+
+        saveTasks()
+        saveArchivedTasks()
+        saveRecurringTasks()
+        updateRecommendation()
+
+        return BackupImportSummary(
+            addedTasks: newTasks.count,
+            addedRecurringTasks: newRecurring.count,
+            addedArchivedTasks: newArchived.count
+        )
+    }
+
+    // MARK: - 初回の案内
+
+    private let onboardingStorageKey = "taskFlow.onboarded"
+
+    /// 設定の「使い方をもう一度見る」で出しているか
+    @Published private(set) var isOnboardingRequested = false
+
+    /// 案内を出すか（初めてでタスクもくり返しもないとき、または設定から頼まれたとき）
+    var needsOnboarding: Bool {
+        isOnboardingRequested
+            || (!userDefaults.bool(forKey: onboardingStorageKey) && tasks.isEmpty && recurringTasks.isEmpty)
+    }
+
+    /// 案内を見終えた。`addExamples` なら、試すための例を入れる
+    func finishOnboarding(addExamples: Bool) {
+        userDefaults.set(true, forKey: onboardingStorageKey)
+        isOnboardingRequested = false
+
+        if addExamples {
+            quickAdd("メールを1通返す 10分")
+            quickAdd("明日までに企画のメモを書く 30分")
+            quickAdd("部屋の片付け 90分")
+        }
+
+        objectWillChange.send()
+    }
+
+    /// 設定から、案内をもう一度見られるようにする
+    func showOnboardingAgain() {
+        isOnboardingRequested = true
+    }
+
     // MARK: - 通知
 
     private let notifier: NotificationScheduling
