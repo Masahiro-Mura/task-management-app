@@ -91,6 +91,24 @@ struct SettingsView: View {
             }
 
             Section {
+                Picker(
+                    "1日の区切り",
+                    selection: Binding(
+                        get: { viewModel.dayStartHour },
+                        set: { viewModel.setDayStartHour($0) }
+                    )
+                ) {
+                    ForEach(HomeViewModel.dayStartHourRange, id: \.self) { hour in
+                        Text("\(hour)時").tag(hour)
+                    }
+                }
+            } header: {
+                Text("1日")
+            } footer: {
+                Text("「今日」が始まる時刻です。夜中まで作業する人は、4時などにすると、深夜の作業が前の日の分として数えられます。")
+            }
+
+            Section {
                 NavigationLink {
                     TaskArchiveListView(
                         title: "保管したタスク",

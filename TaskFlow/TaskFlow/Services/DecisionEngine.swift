@@ -255,8 +255,8 @@ struct DecisionEngine {
             return (lhs.isLight, .lighter)
         }
 
-        let lhsIsPinned = lhs.isPinnedForToday(at: now, calendar: context.calendar)
-        let rhsIsPinned = rhs.isPinnedForToday(at: now, calendar: context.calendar)
+        let lhsIsPinned = lhs.isPinnedForToday(at: now, calendar: context.calendar, dayStartOffset: context.dayStartOffset)
+        let rhsIsPinned = rhs.isPinnedForToday(at: now, calendar: context.calendar, dayStartOffset: context.dayStartOffset)
 
         if lhsIsPinned != rhsIsPinned {
             return (lhsIsPinned, .pinnedToday)

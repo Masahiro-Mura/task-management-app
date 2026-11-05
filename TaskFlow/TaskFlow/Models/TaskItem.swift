@@ -171,12 +171,21 @@ extension TaskItem {
     static let shortTaskMinutes = 15
 
     /// 今日「今日やりたい」の印が付いているか
-    func isPinnedForToday(at now: Date, calendar: Calendar = .current) -> Bool {
+    ///
+    /// - Parameter dayStartOffset: 1日の区切り（0時からずらす秒数）。4時区切りなら、深夜1時に付けた印は前の日のもの
+    func isPinnedForToday(
+        at now: Date,
+        calendar: Calendar = .current,
+        dayStartOffset: TimeInterval = 0
+    ) -> Bool {
         guard !isCompleted, let pinnedForTodayAt else {
             return false
         }
 
-        return calendar.isDate(pinnedForTodayAt, inSameDayAs: now)
+        return calendar.isDate(
+            pinnedForTodayAt.addingTimeInterval(-dayStartOffset),
+            inSameDayAs: now.addingTimeInterval(-dayStartOffset)
+        )
     }
 
     /// 気が乗らないときでも取りかかれる、軽いか短い作業か

@@ -87,12 +87,41 @@ final class HomeViewModel: ObservableObject {
         return Self.availableMinuteOptions.first { $0 >= shortest }
     }
 
+    // MARK: - 1日の区切り
+
+    /// 「今日」が始まる時刻（0〜5時）。夜中まで作業する人のため、4時区切りなどにできる
+    @Published private(set) var dayStartHour = 0
+    private let dayStartHourStorageKey = "taskFlow.dayStartHour"
+    nonisolated static let dayStartHourRange = 0...5
+
+    func setDayStartHour(_ hour: Int) {
+        dayStartHour = min(max(hour, Self.dayStartHourRange.lowerBound), Self.dayStartHourRange.upperBound)
+        userDefaults.set(dayStartHour, forKey: dayStartHourStorageKey)
+        updateRecommendation()
+    }
+
+    /// 1日の区切り（0時からずらす秒数）
+    private var dayStartOffset: TimeInterval {
+        TimeInterval(dayStartHour) * 60 * 60
+    }
+
+    /// 1日の区切りをずらした「今」。日付の言葉（今日・明日）や「今日」の判定に使う
+    private var logicalNow: Date {
+        now().addingTimeInterval(-dayStartOffset)
+    }
+
+    /// 1日の区切りを反映した「今日」（その日の 0時）
+    private var logicalToday: Date {
+        calendar.startOfDay(for: logicalNow)
+    }
+
     /// 今日の欄に出すタスク
     ///
     /// 予定日が今日のものに加え、期限が今日のものと、予定日や期限を過ぎた未完了タスク（持ち越し）を含める。
     /// 冬眠中のタスクは出さない。
     var todayTasks: [TaskItem] {
         let currentDate = now()
+        let today = logicalToday
 
         return tasks.filter { task in
             guard !task.isDormant(at: currentDate, calendar: calendar) else {
@@ -100,16 +129,16 @@ final class HomeViewModel: ObservableObject {
             }
 
             if let scheduledDate = task.scheduledDate,
-               calendar.isDate(scheduledDate, inSameDayAs: currentDate) {
+               calendar.isDate(scheduledDate, inSameDayAs: today) {
                 return true
             }
 
             if let deadline = task.deadline,
-               calendar.isDate(deadline, inSameDayAs: currentDate) {
+               calendar.isDate(deadline, inSameDayAs: today) {
                 return true
             }
 
-            if task.isPinnedForToday(at: currentDate, calendar: calendar) {
+            if task.isPinnedForToday(at: currentDate, calendar: calendar, dayStartOffset: dayStartOffset) {
                 return true
             }
 
@@ -120,7 +149,11 @@ final class HomeViewModel: ObservableObject {
     /// 今日「今日やりたい」の印が付いているタスクのID
     var pinnedTaskIDs: Set<UUID> {
         let currentDate = now()
-        return Set(tasks.filter { $0.isPinnedForToday(at: currentDate, calendar: calendar) }.map(\.id))
+        return Set(
+            tasks
+                .filter { $0.isPinnedForToday(at: currentDate, calendar: calendar, dayStartOffset: dayStartOffset) }
+                .map(\.id)
+        )
     }
 
     /// 今日の欄にある持ち越し（冬眠中を除く）
@@ -133,7 +166,7 @@ final class HomeViewModel: ObservableObject {
         let currentDate = now()
         let todayTaskIDs = Set(todayTasks.map(\.id))
 
-        guard let tomorrow = calendar.date(byAdding: .day, value: 1, to: currentDate) else {
+        guard let tomorrow = calendar.date(byAdding: .day, value: 1, to: logicalToday) else {
             return []
         }
 
@@ -154,7 +187,7 @@ final class HomeViewModel: ObservableObject {
             return false
         }
 
-        let startOfToday = calendar.startOfDay(for: now())
+        let startOfToday = logicalToday
 
         if let scheduledDate = task.scheduledDate, scheduledDate < startOfToday {
             return true
@@ -589,6 +622,7 @@ final class HomeViewModel: ObservableObject {
         restoreFocusSession()
         loadNotificationSettings()
         usesFocusShortcut = userDefaults.bool(forKey: focusShortcutStorageKey)
+        dayStartHour = min(max(userDefaults.integer(forKey: dayStartHourStorageKey), 0), 5)
 
         updateRecommendation()
         scheduleNotifications()
@@ -686,7 +720,7 @@ final class HomeViewModel: ObservableObject {
         }
 
         let currentDate = now()
-        tasks[index].pinnedForTodayAt = tasks[index].isPinnedForToday(at: currentDate, calendar: calendar)
+        tasks[index].pinnedForTodayAt = tasks[index].isPinnedForToday(at: currentDate, calendar: calendar, dayStartOffset: dayStartOffset)
             ? nil
             : currentDate
         tasks[index].updatedAt = currentDate
@@ -705,7 +739,7 @@ final class HomeViewModel: ObservableObject {
             to: option,
             in: &tasks,
             now: now(),
-            startOfToday: calendar.startOfDay(for: now()),
+            startOfToday: logicalToday,
             calendar: calendar
         )
         saveTasks()
@@ -793,7 +827,7 @@ final class HomeViewModel: ObservableObject {
         if RecurrenceScheduler.refreshOccurrences(
             in: &tasks,
             recurringTasks: recurringTasks,
-            now: now(),
+            now: logicalNow,
             calendar: calendar
         ) {
             saveTasks()
@@ -978,7 +1012,7 @@ final class HomeViewModel: ObservableObject {
         QuickAddParser.parse(
             text,
             defaultMinutes: Self.defaultQuickAddMinutes,
-            now: now(),
+            now: logicalNow,
             calendar: calendar,
             ignoring: ignoring
         )
@@ -986,7 +1020,7 @@ final class HomeViewModel: ObservableObject {
 
     /// 読み取った日付の短い表示（「明日 15:00」など）
     func describeQuickAddDate(_ date: Date, includesTime: Bool) -> String {
-        QuickAddParser.describe(date, includesTime: includesTime, now: now(), calendar: calendar)
+        QuickAddParser.describe(date, includesTime: includesTime, now: logicalNow, calendar: calendar)
     }
 
     // MARK: - 今日やったこと
@@ -1000,7 +1034,11 @@ final class HomeViewModel: ObservableObject {
                 guard task.isCompleted, let completedAt = task.completedAt else {
                     return false
                 }
-                return calendar.isDate(completedAt, inSameDayAs: currentDate)
+                // 4時区切りなら、深夜1時に終えたものは前の日の分
+                return calendar.isDate(
+                    completedAt.addingTimeInterval(-dayStartOffset),
+                    inSameDayAs: currentDate.addingTimeInterval(-dayStartOffset)
+                )
             }
             .sorted { ($0.completedAt ?? .distantPast) < ($1.completedAt ?? .distantPast) }
     }
@@ -1287,7 +1325,8 @@ final class HomeViewModel: ObservableObject {
             currentDate: currentDate,
             skippedTaskIDs: Set(skippedUntil.keys),
             calendar: calendar,
-            prefersLight: prefersLight
+            prefersLight: prefersLight,
+            dayStartOffset: dayStartOffset
         )
 
         recommendation = decisionEngine.recommend(
