@@ -12,6 +12,9 @@ struct AllTasksView: View {
     var tomorrowTaskIDs: Set<UUID> = []
     var pinnedTaskIDs: Set<UUID> = []
     var recurringTasks: [RecurringTask] = []
+
+    /// 完了して7日たち、一覧から隠しているもの
+    var hiddenCompletedTasks: [TaskItem] = []
     let onToggleCompletion: (TaskItem) -> Void
     let onDelete: (TaskItem) -> Void
     let onUpdate: (TaskItem) -> Void
@@ -45,7 +48,8 @@ struct AllTasksView: View {
     }
 
     var body: some View {
-        List(tasks, selection: $selection) { task in
+        List(selection: $selection) {
+            ForEach(tasks) { task in
             NavigationLink {
                 EditTaskView(
                     task: task,
@@ -97,6 +101,24 @@ struct AllTasksView: View {
                     showingDeleteConfirmation = true
                 } label: {
                     Label("削除", systemImage: "trash")
+                }
+            }
+            }
+
+            if !hiddenCompletedTasks.isEmpty, !isSelecting {
+                Section {
+                    NavigationLink {
+                        TaskArchiveListView(
+                            title: "完了済み",
+                            emptyMessage: "ありません",
+                            tasks: hiddenCompletedTasks
+                        )
+                    } label: {
+                        LabeledContent(
+                            "完了して\(HomeViewModel.completedHideDays)日たったもの",
+                            value: "\(hiddenCompletedTasks.count)件"
+                        )
+                    }
                 }
             }
         }

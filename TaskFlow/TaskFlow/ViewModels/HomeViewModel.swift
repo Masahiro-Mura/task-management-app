@@ -180,6 +180,263 @@ final class HomeViewModel: ObservableObject {
         tasks
     }
 
+    // MARK: - 片づけ（完了を隠す・手放す）
+
+    /// 完了してからこの日数がたったものは、一覧から隠す（消さない）
+    nonisolated static let completedHideDays = 7
+
+    /// この日数触っていない冬眠中のタスクは、「手放しますか？」と聞く
+    nonisolated static let letGoDormantDays = 60
+
+    /// 「手放しますか？」を聞く間隔（日）
+    nonisolated static let letGoPromptIntervalDays = 30
+
+    /// 手放したタスク（削除ではなく保管）
+    @Published private(set) var archivedTasks: [TaskItem] = []
+    private let archivedStorageKey = "taskFlow.archived"
+    private let lastLetGoPromptStorageKey = "taskFlow.lastLetGoPrompt"
+
+    private func isOldCompleted(_ task: TaskItem) -> Bool {
+        guard task.isCompleted else {
+            return false
+        }
+
+        let completedAt = task.completedAt ?? task.updatedAt
+        let limit = now().addingTimeInterval(-TimeInterval(Self.completedHideDays) * 24 * 60 * 60)
+        return completedAt <= limit
+    }
+
+    /// 「すべてのタスク」に出すもの。完了して7日たったものは除く
+    var visibleAllTasks: [TaskItem] {
+        tasks.filter { !isOldCompleted($0) }
+    }
+
+    /// 完了して7日たち、一覧から隠しているもの
+    var hiddenCompletedTasks: [TaskItem] {
+        tasks.filter { isOldCompleted($0) }
+    }
+
+    /// 長く冬眠しているタスク（手放す候補）
+    var longDormantTasks: [TaskItem] {
+        let currentDate = now()
+        let limit = currentDate.addingTimeInterval(-TimeInterval(Self.letGoDormantDays) * 24 * 60 * 60)
+
+        return tasks.filter { $0.isDormant(at: currentDate, calendar: calendar) && $0.updatedAt <= limit }
+    }
+
+    /// 「手放しますか？」をホームに出すか。長く冬眠しているものがあり、前に聞いてから30日たっていれば
+    var shouldOfferLetGo: Bool {
+        guard !longDormantTasks.isEmpty else {
+            return false
+        }
+
+        guard let last = userDefaults.object(forKey: lastLetGoPromptStorageKey) as? Date else {
+            return true
+        }
+
+        return now().timeIntervalSince(last) >= TimeInterval(Self.letGoPromptIntervalDays) * 24 * 60 * 60
+    }
+
+    /// 選んだタスクを手放す（保管に移す）。推薦や一覧には出なくなる
+    func letGo(_ taskIDs: Set<UUID>) {
+        let moving = tasks.filter { taskIDs.contains($0.id) }
+        guard !moving.isEmpty else {
+            return
+        }
+
+        tasks.removeAll { taskIDs.contains($0.id) }
+        archivedTasks.append(contentsOf: moving)
+        userDefaults.set(now(), forKey: lastLetGoPromptStorageKey)
+
+        saveArchivedTasks()
+        saveTasks()
+        updateRecommendation()
+        objectWillChange.send()
+    }
+
+    /// 「手放しますか？」を、また30日あとまで聞かない
+    func dismissLetGoOffer() {
+        userDefaults.set(now(), forKey: lastLetGoPromptStorageKey)
+        objectWillChange.send()
+    }
+
+    /// 保管から戻す。触れた日時を今にするので、冬眠からも起きる
+    func restoreArchived(_ task: TaskItem) {
+        guard let index = archivedTasks.firstIndex(where: { $0.id == task.id }) else {
+            return
+        }
+
+        var restored = archivedTasks.remove(at: index)
+        restored.updatedAt = now()
+        tasks.append(restored)
+
+        saveArchivedTasks()
+        saveTasks()
+        updateRecommendation()
+    }
+
+    /// 保管したものを完全に消す
+    func deleteArchived(_ task: TaskItem) {
+        archivedTasks.removeAll { $0.id == task.id }
+        saveArchivedTasks()
+    }
+
+    private func loadArchivedTasks() -> [TaskItem] {
+        guard let data = userDefaults.data(forKey: archivedStorageKey),
+              let saved = try? JSONDecoder().decode([TaskItem].self, from: data) else {
+            return []
+        }
+        return saved
+    }
+
+    private func saveArchivedTasks() {
+        guard let data = try? JSONEncoder().encode(archivedTasks) else {
+            return
+        }
+        userDefaults.set(data, forKey: archivedStorageKey)
+    }
+
+    // MARK: - 通知
+
+    private let notifier: NotificationScheduling
+
+    /// 期限が近いのに終わっていないとき、1回だけ知らせる
+    @Published private(set) var deadlineNotificationsEnabled = false
+
+    /// 毎日1回「今の1つ」を届ける
+    @Published private(set) var dailyPickEnabled = false
+
+    /// 「今の1つ」を届ける時刻（0時からの分）
+    @Published private(set) var dailyPickMinutes = HomeViewModel.defaultDailyPickMinutes
+
+    /// 続けて開かれなかったので、毎日の通知を自動で止めたか
+    @Published private(set) var dailyPickPausedByIgnore = false
+
+    /// 通知が許可されていなかったか
+    @Published private(set) var notificationPermissionDenied = false
+
+    nonisolated static let defaultDailyPickMinutes = 8 * 60
+
+    private enum NotificationKey {
+        static let deadline = "taskFlow.notify.deadline"
+        static let daily = "taskFlow.notify.daily"
+        static let dailyMinutes = "taskFlow.notify.dailyMinutes"
+        static let ignored = "taskFlow.notify.dailyIgnored"
+        static let paused = "taskFlow.notify.dailyPausedByIgnore"
+        static let lastDailyFire = "taskFlow.notify.lastDailyFire"
+    }
+
+    private func loadNotificationSettings() {
+        deadlineNotificationsEnabled = userDefaults.bool(forKey: NotificationKey.deadline)
+        dailyPickEnabled = userDefaults.bool(forKey: NotificationKey.daily)
+        dailyPickPausedByIgnore = userDefaults.bool(forKey: NotificationKey.paused)
+
+        if let minutes = userDefaults.object(forKey: NotificationKey.dailyMinutes) as? Int {
+            dailyPickMinutes = minutes
+        }
+    }
+
+    /// 期限の通知を切り替える。オンにするときだけ許可を求める
+    func setDeadlineNotifications(_ enabled: Bool) async {
+        if enabled, !(await notifier.requestAuthorization()) {
+            notificationPermissionDenied = true
+            return
+        }
+
+        notificationPermissionDenied = false
+        deadlineNotificationsEnabled = enabled
+        userDefaults.set(enabled, forKey: NotificationKey.deadline)
+        scheduleNotifications(force: true)
+    }
+
+    /// 毎日の「今の1つ」を切り替える。オンにするときだけ許可を求める
+    func setDailyPick(_ enabled: Bool) async {
+        if enabled, !(await notifier.requestAuthorization()) {
+            notificationPermissionDenied = true
+            return
+        }
+
+        notificationPermissionDenied = false
+        dailyPickEnabled = enabled
+        dailyPickPausedByIgnore = false
+        userDefaults.set(enabled, forKey: NotificationKey.daily)
+        userDefaults.set(false, forKey: NotificationKey.paused)
+        userDefaults.set(0, forKey: NotificationKey.ignored)
+        scheduleNotifications(force: true)
+    }
+
+    /// 「今の1つ」を届ける時刻を変える
+    func setDailyPickMinutes(_ minutes: Int) {
+        dailyPickMinutes = min(max(minutes, 0), 24 * 60 - 1)
+        userDefaults.set(dailyPickMinutes, forKey: NotificationKey.dailyMinutes)
+        scheduleNotifications(force: true)
+    }
+
+    /// アプリが前面に来たとき。赤い数字を消し、毎日の通知が開かれたかを数え、推薦と通知を予定し直す
+    func appDidBecomeActive() {
+        notifier.clearBadge()
+
+        if dailyPickEnabled {
+            let ignored = NotificationPlanner.updatedIgnoreCount(
+                previous: userDefaults.integer(forKey: NotificationKey.ignored),
+                lastFireDate: userDefaults.object(forKey: NotificationKey.lastDailyFire) as? Date,
+                openedAt: now()
+            )
+
+            if ignored >= NotificationPlanner.ignoreLimit {
+                // 見られていない通知を出し続けない
+                dailyPickEnabled = false
+                dailyPickPausedByIgnore = true
+                userDefaults.set(false, forKey: NotificationKey.daily)
+                userDefaults.set(true, forKey: NotificationKey.paused)
+                userDefaults.set(0, forKey: NotificationKey.ignored)
+            } else {
+                userDefaults.set(ignored, forKey: NotificationKey.ignored)
+            }
+        }
+
+        updateRecommendation()
+        scheduleNotifications(force: true)
+    }
+
+    /// 今の設定とタスクから、通知を予定し直す
+    ///
+    /// - Parameter force: どちらの通知もオフでも、残っている通知を消すために呼ぶ
+    private func scheduleNotifications(force: Bool = false) {
+        guard deadlineNotificationsEnabled || dailyPickEnabled || force else {
+            return
+        }
+
+        let currentDate = now()
+        var planned: [PlannedNotification] = []
+
+        if deadlineNotificationsEnabled {
+            planned += NotificationPlanner.deadlineReminders(for: tasks, now: currentDate)
+        }
+
+        if dailyPickEnabled,
+           let fireDate = NotificationPlanner.nextDailyFireDate(
+               minutesFromMidnight: dailyPickMinutes,
+               now: currentDate,
+               calendar: calendar
+           ) {
+            // その時刻の状況で推薦を出して、通知の文に入れる
+            let pick = decisionEngine.recommend(
+                from: tasks,
+                context: DecisionContext(
+                    availableMinutes: availableMinutes,
+                    currentDate: fireDate,
+                    calendar: calendar
+                )
+            )
+            planned.append(NotificationPlanner.dailyPick(taskTitle: pick?.task.title, fireDate: fireDate))
+            userDefaults.set(fireDate, forKey: NotificationKey.lastDailyFire)
+        }
+
+        // 予定がなくなった通知（終えたタスクの期限など）も消えるよう、毎回すべて入れ替える
+        notifier.replaceAll(with: planned)
+    }
+
     /// - Parameters:
     ///   - userDefaults: タスクの保存先。テストでは専用のスイートを渡す
     ///   - seedsSampleTasks: 保存データがないときにサンプルタスクを入れるか
@@ -189,11 +446,13 @@ final class HomeViewModel: ObservableObject {
         userDefaults: UserDefaults = .standard,
         seedsSampleTasks: Bool = HomeViewModel.seedsSampleTasksByDefault,
         calendar: Calendar = .current,
-        now: @escaping () -> Date = { Date() }
+        now: @escaping () -> Date = { Date() },
+        notifier: NotificationScheduling? = nil
     ) {
         self.userDefaults = userDefaults
         self.calendar = calendar
         self.now = now
+        self.notifier = notifier ?? SystemNotificationScheduler()
 
         let savedMinutes = userDefaults.integer(forKey: availableMinutesStorageKey)
         if Self.availableMinuteOptions.contains(savedMinutes) {
@@ -216,8 +475,11 @@ final class HomeViewModel: ObservableObject {
 
         skippedUntil = loadSkippedUntil()
         recurringTasks = loadRecurringTasks()
+        archivedTasks = loadArchivedTasks()
+        loadNotificationSettings()
 
         updateRecommendation()
+        scheduleNotifications()
     }
 
     /// サンプルタスクは開発中のビルドでのみ入れる
@@ -877,6 +1139,9 @@ final class HomeViewModel: ObservableObject {
         }
 
         userDefaults.set(data, forKey: tasksStorageKey)
+
+        // 期限や完了が変わったら、通知も予定し直す（オフなら何もしない）
+        scheduleNotifications()
     }
 
     private enum LoadResult {

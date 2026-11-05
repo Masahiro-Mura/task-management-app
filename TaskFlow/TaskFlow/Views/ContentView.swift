@@ -14,6 +14,7 @@ struct ContentView: View {
     @State private var isShowingDoneToday = false
     @State private var isShowingCarryOver = false
     @State private var firstStepTask: TaskItem?
+    @State private var isShowingLetGo = false
 
     /// 完了した瞬間に出すお祝いの表示
     private struct Celebration: Identifiable, Equatable {
@@ -48,6 +49,10 @@ struct ContentView: View {
                         if let candidate = viewModel.nextStepCandidate {
                             nextStepOffer(for: candidate)
                                 .transition(.opacity)
+                        }
+
+                        if viewModel.shouldOfferLetGo {
+                            letGoOffer
                         }
 
                         Group {
@@ -105,6 +110,15 @@ struct ContentView: View {
                         Image(systemName: "list.bullet")
                     }
                     .accessibilityLabel("すべてのタスク")
+                }
+
+                ToolbarItem(placement: .topBarLeading) {
+                    NavigationLink {
+                        SettingsView(viewModel: viewModel)
+                    } label: {
+                        Image(systemName: "gearshape")
+                    }
+                    .accessibilityLabel("設定")
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
@@ -185,8 +199,19 @@ struct ContentView: View {
             }
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .active {
-                    viewModel.updateRecommendation()
+                    viewModel.appDidBecomeActive()
                 }
+            }
+            .sheet(isPresented: $isShowingLetGo) {
+                LetGoView(
+                    tasks: viewModel.longDormantTasks,
+                    onLetGo: { ids in
+                        viewModel.letGo(ids)
+                    },
+                    onLater: {
+                        viewModel.dismissLetGoOffer()
+                    }
+                )
             }
             .task {
                 while !Task.isCancelled {
@@ -670,11 +695,12 @@ struct ContentView: View {
 
     private var allTasksView: some View {
         AllTasksView(
-            tasks: viewModel.allTasks,
+            tasks: viewModel.visibleAllTasks,
             dormantTaskIDs: viewModel.dormantTaskIDs,
             tomorrowTaskIDs: Set(viewModel.tomorrowTasks.map(\.id)),
             pinnedTaskIDs: viewModel.pinnedTaskIDs,
             recurringTasks: viewModel.recurringTasks,
+            hiddenCompletedTasks: viewModel.hiddenCompletedTasks,
             onToggleCompletion: { task in
                 viewModel.toggleCompletion(for: task)
             },
@@ -782,6 +808,38 @@ struct ContentView: View {
         }
         .padding(12)
         .background(.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    // MARK: - 手放す
+
+    /// 長く冬眠しているタスクがあるときに、月に1回だけ出す
+    private var letGoOffer: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "archivebox")
+                .foregroundStyle(.secondary)
+
+            Text("長く冬眠しているタスクが\(viewModel.longDormantTasks.count)件あります。手放しますか？")
+                .font(.subheadline)
+
+            Spacer(minLength: 0)
+
+            Button("見る") {
+                isShowingLetGo = true
+            }
+            .font(.subheadline)
+            .fontWeight(.semibold)
+
+            Button {
+                viewModel.dismissLetGoOffer()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            .accessibilityLabel("閉じる")
+        }
+        .padding(12)
+        .background(.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
     }
 
     // MARK: - 気が乗らないとき
