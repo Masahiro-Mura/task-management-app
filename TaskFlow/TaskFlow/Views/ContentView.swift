@@ -216,6 +216,9 @@ struct ContentView: View {
             .onAppear {
                 HomeViewModel.current = viewModel
             }
+            .onOpenURL { url in
+                handle(url)
+            }
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .active {
                     viewModel.appDidBecomeActive()
@@ -487,6 +490,14 @@ struct ContentView: View {
                     viewModel.skipOccurrence(task)
                 } label: {
                     Label("今回はお休み", systemImage: "moon.zzz")
+                }
+            }
+
+            if let link = task.link {
+                Button {
+                    openURL(link)
+                } label: {
+                    Label("リンクを開く", systemImage: "safari")
                 }
             }
 
@@ -1002,6 +1013,31 @@ struct ContentView: View {
                 viewModel.deleteTask(task)
             }
         )
+    }
+
+    // MARK: - ウィジェットから開いたとき
+
+    /// ウィジェットやライブアクティビティのURL（`WidgetLink`）に合わせて動く
+    private func handle(_ url: URL) {
+        guard let link = WidgetLink(url: url) else {
+            return
+        }
+
+        switch link {
+        case .home:
+            break
+
+        case .add:
+            isQuickAddOpen = true
+            isQuickAddFocused = true
+
+        case .focus(let taskID, let trialMinutes):
+            // もう集中しているなら、その画面に戻るだけ
+            guard viewModel.focusSession == nil else {
+                return
+            }
+            beginFocus(on: taskID, trialMinutes: trialMinutes)
+        }
     }
 
     // MARK: - 集中の始めと終わり

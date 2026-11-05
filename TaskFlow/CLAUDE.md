@@ -13,12 +13,14 @@
 
 ```
 TaskFlow/
-  App/          TaskFlowApp.swift（エントリポイント）, TaskFlowIntents（Siri・ショートカット）
+  App/          TaskFlowApp.swift（エントリポイント）, TaskFlowIntents（Siri・ショートカット）, FocusLiveActivity（ライブアクティビティの出し入れ）
   Models/       TaskItem, TaskPriority, DecisionContext, RecurringTask（くり返しのひな形・日本の祝日）
   Services/     DecisionEngine（推薦ロジック）, TaskStore（保存）, StepChain（一歩のつながり）, RecurrenceScheduler（くり返しの回）, TaskRescheduler（まとめて組み直す）, PrerequisiteRules（前提に選べるタスク）, TaskSplitter（分解）, QuickAddParser（1行追加の読み取り）, TitleNormalizer（書いた文をタスク名に整える）, CompletionMessages（完了のひとこと）, StepSuggester（一歩の候補。端末内AIか決まった型）, NotificationPlanner（通知の決め方と予定）, DataBackup（書き出し・読み込み）。いずれもUIに依存しない純粋なロジック
+  Shared/       SharedStore（App Group）, WidgetSnapshot（ウィジェット用の写し）, ShareInbox（共有シートの受け箱）, WidgetLink（ウィジェットから開くURL）, FocusActivityAttributes（ライブアクティビティ）。アプリと拡張の両方に入れる
   ViewModels/   HomeViewModel（タスク一覧・保存・推薦の更新）
   Views/        ContentView(ホーム), AddTaskView, EditTaskView, AllTasksView, SplitTaskView, FocusView（集中画面）, DoneTodayView（今日やったこと）, CarryOverView（持ち越しの整理）, FirstStepView（一歩を足す）, StepsView（一歩の一覧）, RecurringListView（くり返し）, SettingsView（設定・保管・手放す・データ）, OnboardingView（初回の案内）
   Components/   TaskRowView, CelebrationView（完了のお祝い）, PrioritySection（「高」は3件まで）, RecurrenceSection（くり返しの選択）
+Extensions/         ウィジェット・共有シートのコード（ターゲットを足すまでの置き場。手順は Extensions/README.md）
 TaskFlowTests/      ロジックの単体テスト
 TaskFlowUITests/    UIテスト
 ```

@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import WidgetKit
 
 @MainActor
 final class HomeViewModel: ObservableObject {
@@ -434,6 +435,111 @@ final class HomeViewModel: ObservableObject {
 
     private let notifier: NotificationScheduling
 
+    // MARK: - ウィジェット・共有シート・ライブアクティビティ
+
+    /// ウィジェット・共有シートと分け合う保存先（App Group）。なければ、どちらにも触れない
+    private let sharedDefaults: UserDefaults?
+
+    /// ウィジェットを描き直す
+    private let reloadWidgets: () -> Void
+
+    /// 集中のライブアクティビティを出し入れする
+    private let focusActivity: FocusActivityPresenting?
+
+    /// 今の推薦を、ウィジェット用の写しとして書く。中身が変わったときだけ描き直す
+    private func publishWidgetSnapshot() {
+        guard let sharedDefaults else {
+            return
+        }
+
+        let pick = recommendation.map { recommendation in
+            WidgetSnapshot.Pick(
+                taskID: recommendation.task.id,
+                title: recommendation.task.title,
+                minutes: recommendation.task.estimatedMinutes,
+                shortReason: recommendation.shortReason,
+                stepLabel: stepPosition(of: recommendation.task).map { "\($0.index)歩目" }
+            )
+        }
+
+        let emptyMessage: String
+        if tasks.allSatisfy(\.isCompleted) {
+            emptyMessage = "やることはありません"
+        } else if lightModeHasNoMatch {
+            emptyMessage = "軽い作業はありません"
+        } else {
+            emptyMessage = "\(availableMinutes)分に入るものはありません"
+        }
+
+        let snapshot = WidgetSnapshot(
+            pick: pick,
+            emptyMessage: emptyMessage,
+            availableMinutes: availableMinutes,
+            todayRemainingCount: todayTasks.filter { !$0.isCompleted }.count,
+            updatedAt: now()
+        )
+
+        guard !snapshot.hasSameContent(as: WidgetSnapshot.load(from: sharedDefaults)) else {
+            return
+        }
+        snapshot.save(to: sharedDefaults)
+        reloadWidgets()
+    }
+
+    /// 共有シートから届いた文を、1行入力と同じ読み方でタスクにする
+    ///
+    /// - Returns: 足した件数
+    @discardableResult
+    func importSharedItems() -> Int {
+        guard let sharedDefaults else {
+            return 0
+        }
+
+        var added = 0
+        for item in ShareInbox.drain(from: sharedDefaults) {
+            let before = Set(tasks.map(\.id))
+            guard quickAdd(item.text) else {
+                continue
+            }
+            added += 1
+
+            if let link = item.link,
+               let index = tasks.firstIndex(where: { !before.contains($0.id) }) {
+                tasks[index].link = link
+                saveTasks()
+            }
+        }
+        return added
+    }
+
+    /// システムのウィジェットを描き直す
+    nonisolated static func reloadSystemWidgets() {
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    /// 集中のライブアクティビティを、今の集中に合わせる
+    private func updateFocusActivity() {
+        guard let focusActivity else {
+            return
+        }
+
+        guard let session = focusSession, let task = focusedTask else {
+            focusActivity.end()
+            return
+        }
+
+        let minutes = session.trialMinutes ?? task.estimatedMinutes
+        focusActivity.show(
+            FocusActivityAttributes(
+                taskID: task.id,
+                taskTitle: task.title,
+                startedAt: session.startedAt,
+                isTrial: session.trialMinutes != nil
+            ),
+            targetEnd: session.startedAt.addingTimeInterval(TimeInterval(minutes) * 60)
+        )
+    }
+
     /// 期限が近いのに終わっていないとき、1回だけ知らせる
     @Published private(set) var deadlineNotificationsEnabled = false
 
@@ -509,6 +615,7 @@ final class HomeViewModel: ObservableObject {
     /// アプリが前面に来たとき。赤い数字を消し、毎日の通知が開かれたかを数え、推薦と通知を予定し直す
     func appDidBecomeActive() {
         notifier.clearBadge()
+        importSharedItems()
 
         if dailyPickEnabled {
             let ignored = NotificationPlanner.updatedIgnoreCount(
@@ -587,12 +694,18 @@ final class HomeViewModel: ObservableObject {
         seedsSampleTasks: Bool = HomeViewModel.seedsSampleTasksByDefault,
         calendar: Calendar = .current,
         now: @escaping () -> Date = { Date() },
-        notifier: NotificationScheduling? = nil
+        notifier: NotificationScheduling? = nil,
+        sharedDefaults: UserDefaults? = nil,
+        reloadWidgets: @escaping () -> Void = {},
+        focusActivity: FocusActivityPresenting? = nil
     ) {
         self.userDefaults = userDefaults
         self.calendar = calendar
         self.now = now
         self.notifier = notifier ?? SystemNotificationScheduler()
+        self.sharedDefaults = sharedDefaults
+        self.reloadWidgets = reloadWidgets
+        self.focusActivity = focusActivity
 
         let savedMinutes = userDefaults.integer(forKey: availableMinutesStorageKey)
         if Self.availableMinuteOptions.contains(savedMinutes) {
@@ -624,6 +737,8 @@ final class HomeViewModel: ObservableObject {
         recurringTasks = store.load([RecurringTask].self, forKey: TaskStore.Key.recurring) ?? []
         archivedTasks = store.load([TaskItem].self, forKey: TaskStore.Key.archived) ?? []
         restoreFocusSession()
+        // 集中が戻らなかったら、残っているライブアクティビティを下げる
+        updateFocusActivity()
         loadNotificationSettings()
         usesFocusShortcut = userDefaults.bool(forKey: focusShortcutStorageKey)
         dayStartHour = min(max(userDefaults.integer(forKey: dayStartHourStorageKey), 0), 5)
@@ -638,7 +753,11 @@ final class HomeViewModel: ObservableObject {
     /// `-uiTestingSeed` も付けると、決まったタスクを2つ入れる。
     static func makeForApp(arguments: [String] = ProcessInfo.processInfo.arguments) -> HomeViewModel {
         guard arguments.contains("-uiTesting") else {
-            return HomeViewModel()
+            return HomeViewModel(
+                sharedDefaults: SharedStore.defaults,
+                reloadWidgets: HomeViewModel.reloadSystemWidgets,
+                focusActivity: SystemFocusActivity()
+            )
         }
 
         let suiteName = "TaskFlowUITesting"
@@ -986,6 +1105,7 @@ final class HomeViewModel: ObservableObject {
         focusSession = FocusSession(taskID: id, startedAt: now(), trialMinutes: trialMinutes)
         saveFocusSession()
         saveTasks()
+        updateFocusActivity()
 
         // 集中している間は、TaskFlow の通知を出さない
         scheduleNotifications()
@@ -995,6 +1115,7 @@ final class HomeViewModel: ObservableObject {
     func continueFocus() {
         focusSession?.trialMinutes = nil
         saveFocusSession()
+        updateFocusActivity()
     }
 
     /// 集中しているあいだにアプリが終わっても、戻ってきたら続きから再開できるよう保存する
@@ -1038,6 +1159,7 @@ final class HomeViewModel: ObservableObject {
 
         focusSession = nil
         saveFocusSession()
+        updateFocusActivity()
 
         // 集中していた間に出るはずだった期限の通知は、ここで出す
         scheduleNotifications(missedSince: startedAt)
@@ -1350,7 +1472,8 @@ final class HomeViewModel: ObservableObject {
         priority: TaskPriority,
         scheduledDate: Date?,
         deadline: Date?,
-        isLight: Bool = false
+        isLight: Bool = false,
+        link: URL? = nil
     ) {
         let task = TaskItem(
             title: title,
@@ -1359,7 +1482,8 @@ final class HomeViewModel: ObservableObject {
             scheduledDate: scheduledDate,
             deadline: deadline,
             updatedAt: now(),
-            isLight: isLight
+            isLight: isLight,
+            link: link
         )
 
         tasks.append(task)
@@ -1550,6 +1674,8 @@ final class HomeViewModel: ObservableObject {
         noRecommendationSummary = recommendation == nil
             ? decisionEngine.summarizeNoRecommendation(from: tasks, context: context)
             : nil
+
+        publishWidgetSnapshot()
     }
 
     /// 開発中の動作確認用サンプルデータ

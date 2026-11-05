@@ -59,6 +59,9 @@ struct TaskItem: Identifiable, Equatable, Codable {
     /// 集中画面で計った、実際にかかった時間（分）。見積もりの初期値を現実に近づけるのに使う
     var actualMinutes: Int?
 
+    /// 共有シートから足したときの、元のページのURL
+    var link: URL?
+
     init(
         id: UUID = UUID(),
         title: String,
@@ -76,7 +79,8 @@ struct TaskItem: Identifiable, Equatable, Codable {
         recurringID: UUID? = nil,
         occurrenceDate: Date? = nil,
         parentTaskID: UUID? = nil,
-        actualMinutes: Int? = nil
+        actualMinutes: Int? = nil,
+        link: URL? = nil
     ) {
         self.id = id
         self.title = title
@@ -95,6 +99,7 @@ struct TaskItem: Identifiable, Equatable, Codable {
         self.occurrenceDate = occurrenceDate
         self.parentTaskID = parentTaskID
         self.actualMinutes = actualMinutes
+        self.link = link
     }
 
     init(from decoder: Decoder) throws {
@@ -169,6 +174,11 @@ struct TaskItem: Identifiable, Equatable, Codable {
         actualMinutes = try container.decodeIfPresent(
             Int.self,
             forKey: .actualMinutes
+        )
+
+        link = try container.decodeIfPresent(
+            URL.self,
+            forKey: .link
         )
     }
 }
