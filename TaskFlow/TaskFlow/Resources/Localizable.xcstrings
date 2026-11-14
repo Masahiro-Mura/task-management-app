@@ -929,6 +929,64 @@
         }
       }
     },
+    "%lld分にする": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set to %lld min"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Passer à %lld min"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Poner %lld min"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf %lld Min."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Imposta %lld min"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Definir %lld min"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "改为%lld分钟"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "改為%lld分鐘"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld분으로"
+          }
+        }
+      }
+    },
     "%lld分に入るものはありません": {
       "localizations": {
         "de": {
@@ -3681,64 +3739,6 @@
         }
       }
     },
-    "「%@」なら、こうして始められます": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "So kannst du mit „%@“ anfangen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "You can start “%@” like this"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Puedes empezar “%@” así"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vous pouvez commencer « %@ » ainsi"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Puoi iniziare “%@” così"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "‘%@’은(는) 이렇게 시작할 수 있어요"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Você pode começar “%@” assim"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "“%@”可以这样开始"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "「%@」可以這樣開始"
-          }
-        }
-      }
-    },
     "「%@」にする": {
       "localizations": {
         "de": {
@@ -5537,64 +5537,6 @@
         }
       }
     },
-    "「今はやらない」にしたタスクが%lld件あります（1時間たつと戻ります）": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld Aufgaben sind auf „Später“ (sie kommen nach 1 Stunde wieder)"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld tasks are set to “Later” (they come back after 1 hour)"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld tareas están en “Luego” (vuelven en 1 hora)"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld tâches sont mises à « Plus tard » (elles reviennent après 1 heure)"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld attività sono su “Dopo” (tornano dopo 1 ora)"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "‘나중에’로 둔 작업이 %lld개 있어요(1시간 뒤에 돌아와요)"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld tarefas estão em “Depois” (voltam em 1 hora)"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "有%lld项任务设为“稍后”（1小时后恢复）"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "有%lld項任務設為「稍後」（1小時後恢復）"
-          }
-        }
-      }
-    },
     "「今日」が始まる時刻です。夜中まで作業する人は、4時などにすると、深夜の作業が前の日の分として数えられます。": {
       "localizations": {
         "de": {
@@ -5827,6 +5769,64 @@
         }
       }
     },
+    "あとで %lld件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Later: %lld"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plus tard : %lld"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Luego: %lld"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Später: %lld"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dopo: %lld"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Depois: %lld"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "稍后 %lld项"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "稍後 %lld項"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "나중에 %lld개"
+          }
+        }
+      }
+    },
     "あとでにした%lld件を戻す": {
       "localizations": {
         "de": {
@@ -5939,6 +5939,64 @@
           "stringUnit": {
             "state": "translated",
             "value": "已設為稍後。1小時後會再出現"
+          }
+        }
+      }
+    },
+    "あとでを戻す": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bring back “Later”"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remettre « Plus tard »"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recuperar “Luego”"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„Später“ zurückholen"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Riprendi “Dopo”"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trazer de volta “Depois”"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复“稍后”"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢復「稍後」"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "‘나중에’ 되돌리기"
           }
         }
       }
@@ -7857,60 +7915,60 @@
         }
       }
     },
-    "やり残しは静かに持ち越し、放っておいたものは冬眠します。気が乗らない日は、軽いものだけにもできます。": {
+    "やり残しは静かに持ち越します。気が乗らない日は、軽いものだけに。": {
       "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unerledigtes wird leise auf den nächsten Tag verschoben, Liegengebliebenes ruht. An Tagen ohne Energie kannst du dich auf leichte Aufgaben beschränken."
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Unfinished tasks quietly carry over, and things left alone go into hibernation. On low-energy days, you can stick to light tasks."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lo pendiente pasa tranquilamente al día siguiente y lo olvidado hiberna. Los días sin ganas, puedes quedarte con tareas ligeras."
+            "value": "Unfinished tasks quietly carry over. On low days, stick to light ones."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les tâches inachevées sont reportées en douceur, celles laissées de côté hibernent. Les jours sans énergie, vous pouvez vous en tenir aux tâches légères."
+            "value": "Ce qui reste est reporté en douceur. Les jours sans, restez léger."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lo pendiente pasa sin ruido. Los días sin ganas, solo lo ligero."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unerledigtes wird leise verschoben. An müden Tagen nur Leichtes."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ciò che resta passa al giorno dopo senza clamore, ciò che è trascurato va in letargo. Nei giorni senza energia, puoi limitarti alle attività leggere."
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "못 끝낸 일은 조용히 넘어가고, 내버려 둔 일은 겨울잠을 자요. 기운이 없는 날엔 가벼운 일만 할 수도 있어요."
+            "value": "Ciò che resta passa al giorno dopo. Nei giorni no, solo cose leggere."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O que ficou pendente passa para o dia seguinte com calma, e o que ficou de lado hiberna. Nos dias sem ânimo, dá para ficar só nas tarefas leves."
+            "value": "O que ficou passa adiante com calma. Nos dias sem ânimo, só o leve."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "没做完的会悄悄顺延，放着不管的会进入冬眠。没精神的日子，也可以只做轻松的事。"
+            "value": "没做完的会悄悄顺延。没精神的日子，只做轻松的。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "沒做完的會悄悄順延，放著不管的會進入冬眠。沒精神的日子，也可以只做輕鬆的事。"
+            "value": "沒做完的會悄悄順延。沒精神的日子，只做輕鬆的。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "못 끝낸 일은 조용히 넘어가요. 기운 없는 날엔 가벼운 일만."
           }
         }
       }
@@ -9771,64 +9829,6 @@
         }
       }
     },
-    "下の＋を押して「明日までにレポート書かないと 30分」のように書くと、そのまま追加できます。": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tippe unten auf + und schreib etwa „Rechnung senden 15m“, um sie sofort hinzuzufügen."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tap + below and write something like “Send the invoice 15m” to add it right away."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Toca + abajo y escribe algo como “Enviar la factura 15m” para añadirla al momento."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Touchez + en bas et écrivez par exemple « Envoyer la facture 15m » pour l’ajouter tout de suite."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tocca + in basso e scrivi per esempio “Inviare la fattura 15m” per aggiungerla subito."
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "아래의 ＋를 누르고 ‘청구서 보내기 15m’처럼 쓰면 바로 추가돼요."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Toque em + abaixo e escreva algo como “Enviar a fatura 15m” para adicionar na hora."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "点下方的＋，写下“发送账单 15m”之类的内容，就能直接添加。"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "點下方的＋，寫下「寄出帳單 15m」之類的內容，就能直接新增。"
-          }
-        }
-      }
-    },
     "並べ替え": {
       "localizations": {
         "de": {
@@ -10293,64 +10293,6 @@
         }
       }
     },
-    "今の空き時間で取りかかれるタスクはありません": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Keine Aufgabe passt in deine freie Zeit"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No tasks fit the time you have now"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ninguna tarea cabe en el tiempo que tienes"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aucune tâche ne tient dans votre temps libre"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nessuna attività entra nel tempo che hai"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "지금의 빈 시간에 할 수 있는 작업이 없어요"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nenhuma tarefa cabe no tempo que você tem"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "现在的空闲时间里没有能着手的任务"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "現在的空閒時間裡沒有能著手的任務"
-          }
-        }
-      }
-    },
     "今の空き時間で取りかかれるタスクはありません。": {
       "localizations": {
         "de": {
@@ -10463,64 +10405,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "維持現狀"
-          }
-        }
-      }
-    },
-    "今はやらないを取り消す": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "„Später“ rückgängig"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Undo “Later”"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Deshacer “Luego”"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Annuler « Plus tard »"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Annulla “Dopo”"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "‘나중에’ 취소"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Desfazer “Depois”"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "取消“稍后”"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "取消「稍後」"
           }
         }
       }
@@ -12787,6 +12671,64 @@
         }
       }
     },
+    "冬眠 %lld件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hibernating: %lld"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En hibernation : %lld"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hibernando: %lld"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ruhend: %lld"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In letargo: %lld"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hibernando: %lld"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "冬眠 %lld项"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "冬眠 %lld項"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "겨울잠 %lld개"
+          }
+        }
+      }
+    },
     "冬眠させる": {
       "localizations": {
         "de": {
@@ -12841,64 +12783,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "讓它冬眠"
-          }
-        }
-      }
-    },
-    "冬眠中のタスクが%lld件あります（「すべてのタスク」から起こせます）": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld Aufgaben ruhen (wecke sie unter „Alle Aufgaben“)"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld tasks are hibernating (wake them from “All tasks”)"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld tareas están hibernando (despiértalas desde “Todas las tareas”)"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld tâches hibernent (réveillez-les depuis « Toutes les tâches »)"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld attività sono in letargo (svegliale da “Tutte le attività”)"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "겨울잠 중인 작업이 %lld개 있어요(‘모든 작업’에서 깨울 수 있어요)"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld tarefas estão hibernando (acorde-as em “Todas as tarefas”)"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "有%lld项冬眠中的任务（可从“所有任务”唤醒）"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "有%lld項冬眠中的任務（可從「所有任務」喚醒）"
           }
         }
       }
@@ -13135,64 +13019,6 @@
         }
       }
     },
-    "前提タスクの完了を待っているタスクが%lld件あります": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld Aufgaben warten auf andere Aufgaben"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld tasks are waiting for other tasks to finish"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld tareas esperan a que terminen otras"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld tâches attendent que d’autres soient terminées"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld attività aspettano che ne finiscano altre"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "선행 작업이 끝나기를 기다리는 작업이 %lld개 있어요"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld tarefas esperam outras terminarem"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "有%lld项任务在等待前置任务完成"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "有%lld項任務在等待前置任務完成"
-          }
-        }
-      }
-    },
     "取りかかり中": {
       "localizations": {
         "de": {
@@ -13421,64 +13247,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "只解一題"
-          }
-        }
-      }
-    },
-    "大きいタスクは、編集画面から小さく分けられます": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Große Aufgaben lassen sich im Bearbeiten-Bildschirm aufteilen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Big tasks can be split into smaller ones from the edit screen"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Las tareas grandes se pueden dividir desde la pantalla de edición"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les grandes tâches peuvent être divisées depuis l’écran de modification"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le attività grandi si possono dividere dalla schermata di modifica"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "큰 작업은 편집 화면에서 작게 나눌 수 있어요"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tarefas grandes podem ser divididas na tela de edição"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "大任务可以在编辑页拆小"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "大任務可以在編輯頁拆小"
           }
         }
       }
@@ -14349,6 +14117,64 @@
           "stringUnit": {
             "state": "translated",
             "value": "決定店家或網站"
+          }
+        }
+      }
+    },
+    "待ち %lld件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting: %lld"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En attente : %lld"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En espera: %lld"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wartend: %lld"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In attesa: %lld"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esperando: %lld"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等待中 %lld项"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等待中 %lld項"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "대기 %lld개"
           }
         }
       }
@@ -15455,64 +15281,6 @@
         }
       }
     },
-    "日付・時間・くり返しは、書いたとおりに読み取ります。": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Datum, Uhrzeit und Wiederholung werden so gelesen, wie du sie schreibst."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dates, times, and repeats are read just as you write them."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Las fechas, horas y repeticiones se leen tal como las escribes."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dates, heures et répétitions sont lues telles que vous les écrivez."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Date, orari e ripetizioni vengono letti così come li scrivi."
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "날짜・시간・반복은 쓴 그대로 읽어 들여요."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Datas, horários e repetições são lidos do jeito que você escreve."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "日期、时间和重复会按你写的内容识别。"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "日期、時間和重複會照你寫的內容判讀。"
-          }
-        }
-      }
-    },
     "日時": {
       "localizations": {
         "de": {
@@ -15745,60 +15513,60 @@
         }
       }
     },
-    "明日の15時に資料作成 30分\n金曜までにレポート 2時間\n毎週月曜にゴミ出し 5分": {
+    "明日までにレポート書かないと 30分": {
       "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Folien vorbereiten 30m\nBericht schreiben 2h\nMüll rausbringen 5m"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Prepare slides 30m\nWrite the report 2h\nTake out the trash 5m"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Preparar las diapositivas 30m\nEscribir el informe 2h\nSacar la basura 5m"
+            "value": "Write the report 30m"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Préparer les diapositives 30m\nRédiger le rapport 2h\nSortir les poubelles 5m"
+            "value": "Rédiger le rapport 30m"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escribir el informe 30m"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bericht schreiben 30m"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Preparare le slide 30m\nScrivere il report 2h\nPortare fuori la spazzatura 5m"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "발표 자료 준비하기 30m\n보고서 쓰기 2h\n쓰레기 버리기 5m"
+            "value": "Scrivere il report 30m"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Preparar os slides 30m\nEscrever o relatório 2h\nLevar o lixo para fora 5m"
+            "value": "Escrever o relatório 30m"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "准备演示资料 30m\n写报告 2h\n倒垃圾 5m"
+            "value": "写报告 30m"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "準備簡報 30m\n寫報告 2h\n倒垃圾 5m"
+            "value": "寫報告 30m"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "보고서 쓰기 30m"
           }
         }
       }
@@ -15861,60 +15629,60 @@
         }
       }
     },
-    "明日以降に予定しているタスクが%lld件あります（その日になったら出てきます）": {
+    "明日以降 %lld件": {
       "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld Aufgaben sind für morgen oder später geplant (sie erscheinen an dem Tag)"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld tasks are planned for tomorrow or later (they’ll appear on that day)"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld tareas están previstas para mañana o más adelante (aparecerán ese día)"
+            "value": "Tomorrow or later: %lld"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld tâches sont prévues pour demain ou plus tard (elles apparaîtront ce jour-là)"
+            "value": "Demain ou après : %lld"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mañana o después: %lld"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ab morgen: %lld"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld attività sono previste per domani o dopo (compariranno quel giorno)"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "내일 이후로 예정한 작업이 %lld개 있어요(그날이 되면 나와요)"
+            "value": "Da domani: %lld"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld tarefas estão planejadas para amanhã ou depois (aparecem no dia)"
+            "value": "Amanhã ou depois: %lld"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "有%lld项任务计划在明天以后（到那天就会出现）"
+            "value": "明天以后 %lld项"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "有%lld項任務預定在明天以後（到那天就會出現）"
+            "value": "明天以後 %lld項"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "내일 이후 %lld개"
           }
         }
       }
@@ -17543,64 +17311,6 @@
         }
       }
     },
-    "気が乗らないときは、軽いものにしますか？": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Keine Lust? Auf leichte Aufgaben wechseln?"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Not feeling it? Switch to light tasks?"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "¿Sin ganas? ¿Pasamos a tareas ligeras?"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pas motivé ? Passer aux tâches légères ?"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Non ne hai voglia? Passare alle attività leggere?"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "내키지 않을 땐 가벼운 일로 할까요?"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sem ânimo? Mudar para tarefas leves?"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "提不起劲的话，换成轻松的任务吗？"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "提不起勁的話，換成輕鬆的任務嗎？"
-          }
-        }
-      }
-    },
     "決める": {
       "localizations": {
         "de": {
@@ -18181,176 +17891,60 @@
         }
       }
     },
-    "空き時間%lld分に収まらないタスクが%lld件あります（最短%lld分）": {
+    "空き時間と期限から1つ選び、理由も添えます。": {
       "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%2$lld Aufgaben passen nicht in deine %1$lld freien Minuten (kürzeste: %3$lld Min.)"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "%2$lld tasks don’t fit in your %1$lld free minutes (shortest: %3$lld min)"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%2$lld tareas no caben en tus %1$lld min libres (la más corta: %3$lld min)"
+            "value": "Picks one from your free time and deadlines, and tells you why."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%2$lld tâches ne tiennent pas dans vos %1$lld min libres (la plus courte : %3$lld min)"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%2$lld attività non entrano nei tuoi %1$lld min liberi (la più breve: %3$lld min)"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "빈 시간 %1$lld분에 들어가지 않는 작업이 %2$lld개 있어요(최단 %3$lld분)"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%2$lld tarefas não cabem nos seus %1$lld min livres (a mais curta: %3$lld min)"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "有%2$lld项任务放不进空闲的%1$lld分钟（最短%3$lld分钟）"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "有%2$lld項任務放不進空閒的%1$lld分鐘（最短%3$lld分鐘）"
-          }
-        }
-      }
-    },
-    "空き時間を%lld分にする": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Freie Zeit auf %lld Min. setzen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Set free time to %lld min"
+            "value": "Choisit une tâche selon votre temps libre et vos échéances, et dit pourquoi."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Poner el tiempo libre en %lld min"
+            "value": "Elige una según tu tiempo libre y tus fechas límite, y te dice por qué."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Régler le temps libre sur %lld min"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Imposta il tempo libero a %lld min"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "빈 시간을 %lld분으로 하기"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Definir tempo livre em %lld min"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "把空闲时间设为%lld分钟"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "把空閒時間設為%lld分鐘"
-          }
-        }
-      }
-    },
-    "空き時間・期限・優先度から、今やるタスクを1件だけ選びます。なぜそれなのか、理由も添えます。": {
-      "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Wählt anhand deiner freien Zeit, Fristen und Prioritäten genau eine Aufgabe für jetzt – und sagt dir, warum."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Picks just one task to do now from your free time, deadlines, and priorities — and tells you why."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Elige una sola tarea para ahora según tu tiempo libre, fechas límite y prioridades, y te dice por qué."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Choisit une seule tâche à faire maintenant selon votre temps libre, vos échéances et vos priorités — et explique pourquoi."
+            "value": "Wählt eine nach freier Zeit und Fristen aus – und sagt dir, warum."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sceglie una sola attività da fare ora in base a tempo libero, scadenze e priorità, e ti dice perché."
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "빈 시간・마감・우선순위를 보고 지금 할 작업을 하나만 골라요. 왜 그 작업인지 이유도 알려 줘요."
+            "value": "Ne sceglie una in base a tempo libero e scadenze, e ti dice perché."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Escolhe uma única tarefa para agora a partir do seu tempo livre, prazos e prioridades — e diz por quê."
+            "value": "Escolhe uma pelo seu tempo livre e prazos, e diz por quê."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "根据空闲时间、截止时间和优先级，只选出一项现在要做的任务，并附上理由。"
+            "value": "根据空闲时间和截止时间选出一项，并附上理由。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "依照空閒時間、截止時間和優先順序，只選出一項現在要做的任務，並附上理由。"
+            "value": "依空閒時間和截止時間選出一項，並附上理由。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "빈 시간과 마감으로 하나를 고르고 이유도 알려 줘요."
           }
         }
       }
@@ -19457,6 +19051,64 @@
         }
       }
     },
+    "軽いものだけにしますか？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Switch to light tasks only?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Passer aux tâches légères seulement ?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Solo tareas ligeras?"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur leichte Aufgaben?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo attività leggere?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Só tarefas leves?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只看轻松的任务吗？"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只看輕鬆的任務嗎？"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "가벼운 작업만 볼까요?"
+          }
+        }
+      }
+    },
     "軽いものに": {
       "localizations": {
         "de": {
@@ -20443,6 +20095,64 @@
         }
       }
     },
+    "長いもの %lld件（最短%lld分）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Too long: %lld (shortest %lld min)"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trop longues : %lld (la plus courte %lld min)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Largas: %lld (la más corta %lld min)"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zu lang: %lld (kürzeste %lld Min.)"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Troppo lunghe: %lld (la più breve %lld min)"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Longas: %lld (a mais curta %lld min)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "较长 %lld项（最短%lld分钟）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "較長 %lld項（最短%lld分鐘）"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "긴 작업 %lld개(최단 %lld분)"
+          }
+        }
+      }
+    },
     "長く冬眠しているタスクが%lld件あります。手放しますか？": {
       "localizations": {
         "de": {
@@ -20903,6 +20613,122 @@
           "stringUnit": {
             "state": "translated",
             "value": "高"
+          }
+        }
+      }
+    },
+    "＋を押して、思いついたまま書いてください": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap + and write whatever comes to mind"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Touchez + et écrivez ce qui vous vient"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toca + y escribe lo que se te ocurra"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tippe auf + und schreib einfach drauflos"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tocca + e scrivi ciò che ti viene in mente"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toque em + e escreva o que vier à cabeça"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点＋，想到什么就写什么"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "點＋，想到什麼就寫什麼"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "＋를 누르고 생각나는 대로 써 주세요"
+          }
+        }
+      }
+    },
+    "＋を押して、思いついたまま書くだけ。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap + and just write it as it comes."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Touchez + et écrivez simplement."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toca + y escríbelo tal cual."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tippe auf + und schreib es einfach auf."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tocca + e scrivilo così com’è."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toque em + e escreva do jeito que vier."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点＋，想到什么写什么就好。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "點＋，想到什麼寫什麼就好。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "＋를 누르고 생각나는 대로 쓰면 돼요."
           }
         }
       }

@@ -18,19 +18,19 @@ struct OnboardingView: View {
         Page(
             systemImage: "sparkles",
             title: String(localized: "開いたら、今やる1つ"),
-            body: String(localized: "空き時間・期限・優先度から、今やるタスクを1件だけ選びます。なぜそれなのか、理由も添えます。"),
+            body: String(localized: "空き時間と期限から1つ選び、理由も添えます。"),
             example: nil
         ),
         Page(
             systemImage: "text.cursor",
             title: String(localized: "1行で入れるだけ"),
-            body: String(localized: "日付・時間・くり返しは、書いたとおりに読み取ります。"),
-            example: String(localized: "明日の15時に資料作成 30分\n金曜までにレポート 2時間\n毎週月曜にゴミ出し 5分")
+            body: String(localized: "＋を押して、思いついたまま書くだけ。"),
+            example: String(localized: "明日までにレポート書かないと 30分")
         ),
         Page(
             systemImage: "leaf",
             title: String(localized: "できなかった日も、責めません"),
-            body: String(localized: "やり残しは静かに持ち越し、放っておいたものは冬眠します。気が乗らない日は、軽いものだけにもできます。"),
+            body: String(localized: "やり残しは静かに持ち越します。気が乗らない日は、軽いものだけに。"),
             example: nil
         )
     ]

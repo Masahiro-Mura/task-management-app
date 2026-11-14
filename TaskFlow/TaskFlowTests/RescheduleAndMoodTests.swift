@@ -200,9 +200,13 @@ struct RescheduleAndMoodTests {
     func skippingOffersLightModeWhichRecommendsEasyTasks() {
         let viewModel = makeViewModel()
         _ = add(viewModel, "企画書を書く", minutes: 45, priority: .high)
-        _ = add(viewModel, "資料を読む", minutes: 30)
+        // 2回目の「あとで」が「資料を読む」に当たるよう、軽いものより短くしておく
+        _ = add(viewModel, "資料を読む", minutes: 20)
         let light = add(viewModel, "メールを整理する", minutes: 25, isLight: true)
 
+        // 1回目は聞かない（文字を増やさないため）。続けて2回目で聞く
+        viewModel.skipRecommendation()
+        #expect(!viewModel.isOfferingLightMode)
         viewModel.skipRecommendation()
         #expect(viewModel.isOfferingLightMode)
 

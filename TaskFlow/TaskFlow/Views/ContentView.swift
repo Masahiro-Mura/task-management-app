@@ -136,6 +136,13 @@ struct ContentView: View {
                     .accessibilityIdentifier("allTasksButton")
                 }
 
+                // 軽いものだけの切り替えは右上に置く（ホームの文字を減らすため）
+                if !viewModel.tasks.isEmpty {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        lightModeToggle
+                    }
+                }
+
                 ToolbarItem(placement: .topBarLeading) {
                     NavigationLink {
                         SettingsView(viewModel: viewModel)
@@ -308,7 +315,7 @@ struct ContentView: View {
             Text("最初のタスクを入れましょう")
                 .font(.headline)
 
-            Text("下の＋を押して「明日までにレポート書かないと 30分」のように書くと、そのまま追加できます。")
+            Text("＋を押して、思いついたまま書いてください")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -322,16 +329,6 @@ struct ContentView: View {
     /// 今使える時間の選択
     private var availableMinutesPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("今使える時間")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-
-                Spacer()
-
-                lightModeToggle
-            }
-
             if viewModel.prefersLight {
                 lightModeStatus
             }
@@ -652,69 +649,43 @@ struct ContentView: View {
     private func noRecommendationCard(
         _ summary: NoRecommendationSummary
     ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             if summary.allCompleted {
                 Label("すべてのタスクが完了しています", systemImage: "checkmark.circle")
                     .font(.headline)
             } else {
-                Label("今の空き時間で取りかかれるタスクはありません", systemImage: "clock")
+                Label("\(viewModel.availableMinutes)分に入るものはありません", systemImage: "clock")
                     .font(.headline)
 
-                if summary.tooLongCount > 0,
-                   let shortest = summary.shortestTooLongMinutes {
-                    Text("空き時間\(viewModel.availableMinutes)分に収まらないタスクが\(summary.tooLongCount)件あります（最短\(shortest)分）")
-                }
-
-                if summary.waitingForPrerequisitesCount > 0 {
-                    Text("前提タスクの完了を待っているタスクが\(summary.waitingForPrerequisitesCount)件あります")
-                }
-
-                if summary.skippedCount > 0 {
-                    Text("「今はやらない」にしたタスクが\(summary.skippedCount)件あります（1時間たつと戻ります）")
-                }
-
-                if summary.scheduledLaterCount > 0 {
-                    Text("明日以降に予定しているタスクが\(summary.scheduledLaterCount)件あります（その日になったら出てきます）")
-                }
-
-                if summary.dormantCount > 0 {
-                    Text("冬眠中のタスクが\(summary.dormantCount)件あります（「すべてのタスク」から起こせます）")
-                }
-
-                if summary.tooLongCount > 0 {
-                    Text("大きいタスクは、編集画面から小さく分けられます")
+                // 隠れているものは隠さず、短い札1行で伝える
+                if let breakdown = breakdownText(summary) {
+                    Text(breakdown)
                         .foregroundStyle(.secondary)
                 }
 
                 HStack(spacing: 8) {
                     if let suggested = viewModel.suggestedAvailableMinutes {
-                        Button("空き時間を\(suggested)分にする") {
+                        Button("\(suggested)分にする") {
                             viewModel.setAvailableMinutes(suggested)
                         }
                     }
 
                     if summary.skippedCount > 0 {
-                        Button("今はやらないを取り消す") {
+                        Button("あとでを戻す") {
                             viewModel.clearSkips()
                         }
                     }
                 }
                 .buttonStyle(.bordered)
-                .padding(.top, 4)
 
                 // 時間に収まらなくても、最初の一歩か5分だけなら始められる
                 if let taskID = summary.shortestTooLongTaskID,
                    let task = viewModel.tasks.first(where: { $0.id == taskID }) {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("「\(task.title)」なら、こうして始められます")
-                            .foregroundStyle(.secondary)
-
-                        // 時間に入らない大きいタスクこそ、最初の5分の案があると手をつけやすい
                         firstStepIdeaRow(for: task)
 
                         startShortcuts(for: task)
                     }
-                    .padding(.top, 6)
                     .task(id: task.id) {
                         await viewModel.loadFirstStepIdeas(for: task)
                     }
@@ -726,6 +697,32 @@ struct ContentView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.thinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+
+    /// 入らない理由の内訳。「長いもの 1件（最短60分）・あとで 1件」のように短く
+    private func breakdownText(_ summary: NoRecommendationSummary) -> String? {
+        var parts: [String] = []
+
+        if summary.tooLongCount > 0, let shortest = summary.shortestTooLongMinutes {
+            parts.append(String(localized: "長いもの \(summary.tooLongCount)件（最短\(shortest)分）"))
+        }
+        if summary.skippedCount > 0 {
+            parts.append(String(localized: "あとで \(summary.skippedCount)件"))
+        }
+        if summary.waitingForPrerequisitesCount > 0 {
+            parts.append(String(localized: "待ち \(summary.waitingForPrerequisitesCount)件"))
+        }
+        if summary.scheduledLaterCount > 0 {
+            parts.append(String(localized: "明日以降 \(summary.scheduledLaterCount)件"))
+        }
+        if summary.dormantCount > 0 {
+            parts.append(String(localized: "冬眠 \(summary.dormantCount)件"))
+        }
+
+        guard !parts.isEmpty else {
+            return nil
+        }
+        return parts.joined(separator: String(localized: "weekday.separator", defaultValue: "・", comment: "曜日を並べるときの区切り"))
     }
 
     // MARK: - 今日
@@ -1243,6 +1240,8 @@ struct ContentView: View {
             }
         } label: {
             Label("軽いものだけ", systemImage: isOn ? "checkmark" : "leaf")
+                // ツールバーではアイコンだけになるので、名前も必ず出す（今どちらか分かるように）
+                .labelStyle(.titleAndIcon)
                 .font(.footnote)
                 .fontWeight(isOn ? .semibold : .regular)
                 .padding(.horizontal, 10)
@@ -1270,7 +1269,7 @@ struct ContentView: View {
             Image(systemName: "leaf")
                 .foregroundStyle(.green)
 
-            Text("気が乗らないときは、軽いものにしますか？")
+            Text("軽いものだけにしますか？")
                 .font(.subheadline)
 
             Spacer(minLength: 0)

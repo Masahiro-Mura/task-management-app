@@ -979,14 +979,18 @@ final class HomeViewModel: ObservableObject {
                 repeatedSkipCandidate = tasks.first { $0.id == task.id }
                 isOfferingLightMode = false
             } else {
-                // 気が乗らないのかもしれないので、軽いものにするか聞く（責めずに逃げ道を出す）
-                isOfferingLightMode = !prefersLight
+                // 続けて見送るなら気が乗らないのかもしれないので、軽いものにするか聞く（1回目は聞かない。文字を増やさないため）
+                skipsInARow += 1
+                isOfferingLightMode = !prefersLight && skipsInARow >= 2
             }
             saveSkipCounts()
 
             updateRecommendation()
         }
     }
+
+    /// 続けて「あとで」にした回数（取りかかる・終えると 0 に戻る）。2回目から「軽いものだけにしますか？」を出す
+    private var skipsInARow = 0
 
     // MARK: - 何度も見送られるタスク
 
@@ -1226,6 +1230,7 @@ final class HomeViewModel: ObservableObject {
 
         tasks[index].updatedAt = now()
         resetSkipCount(for: id)
+        skipsInARow = 0
         focusSession = FocusSession(taskID: id, startedAt: now(), trialMinutes: trialMinutes)
         saveFocusSession()
         saveTasks()
@@ -1448,6 +1453,7 @@ final class HomeViewModel: ObservableObject {
             return
         }
 
+        skipsInARow = 0
         lastCompletedTask = tasks[index]
         resetSkipCount(for: task.id)
         tasks[index].isCompleted = true
