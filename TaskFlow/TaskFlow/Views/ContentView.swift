@@ -7,13 +7,11 @@ struct ContentView: View {
 
     @StateObject private var viewModel = HomeViewModel.makeForApp()
     @State private var isShowingAddTask = false
-    @State private var isTodayExpanded = false
     @State private var editingTaskID: UUID?
     @State private var quickAddText = ""
     @State private var ignoredQuickAddParts: Set<QuickAddParser.Part> = []
     @State private var celebration: Celebration?
     @State private var isShowingDoneToday = false
-    @State private var isShowingCarryOver = false
     @State private var firstStepTask: TaskItem?
     @State private var isShowingLetGo = false
     @State private var isShowingFullReason = false
@@ -77,12 +75,8 @@ struct ContentView: View {
                         }
                         .animation(.easeInOut(duration: 0.25), value: viewModel.recommendation?.task.id)
 
-                        // 「あとで」にしたものも、1時間待たずにいつでも戻せる
-                        if viewModel.recommendation != nil, viewModel.skippedTaskCount > 0 {
-                            skippedRow
-                        }
-
-                        todaySection
+                        // ほかのタスクは、ここから一覧へ（ホームには今やる1つだけを置く）
+                        otherTasksRow
 
                         doneTodayRow
                     }
@@ -126,16 +120,6 @@ struct ContentView: View {
             }
             .navigationTitle("今やること")
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    NavigationLink {
-                        allTasksView
-                    } label: {
-                        Image(systemName: "list.bullet")
-                    }
-                    .accessibilityLabel("すべてのタスク")
-                    .accessibilityIdentifier("allTasksButton")
-                }
-
                 // 軽いものだけの切り替えは右上に置く（ホームの文字を減らすため）
                 if !viewModel.tasks.isEmpty {
                     ToolbarItem(placement: .topBarTrailing) {
@@ -351,8 +335,8 @@ struct ContentView: View {
 
     // MARK: - 推薦カード
 
-    /// 今の1つ。取りかかる操作（始める・5分だけ）だけを大きくし、完了は名前の横の丸、
-    /// 見送りは控えめな文字、ほかの操作は右上の「…」にまとめる（並んだボタンで迷わせないため）
+    /// 今の1つ。取りかかる操作（始める・5分だけ）を大きく、今はやらない操作（あとで・終わった）を
+    /// その下に控えめに並べ、めったに使わない操作は右上の「…」にまとめる（並んだボタンで迷わせないため）
     private func recommendationCard(
         _ recommendation: TaskRecommendation
     ) -> some View {
@@ -360,13 +344,25 @@ struct ContentView: View {
 
         return VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .top, spacing: 12) {
-                completeCheck(for: task)
+                VStack(alignment: .leading, spacing: 4) {
+                    // 一歩なら、どのタスクの一歩かを名前の上に小さく示す（つながりが分かるように）
+                    if let position = viewModel.stepPosition(of: task) {
+                        Label(
+                            "「\(CompletionMessages.baseTitle(of: position.parentTitle))」の\(position.index)歩目",
+                            systemImage: "shoeprints.fill"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .accessibilityIdentifier("stepParent")
+                    }
 
-                Text(task.title)
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityIdentifier("recommendationTitle")
+                    Text(task.title)
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                        .accessibilityIdentifier("recommendationTitle")
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 cardMenu(for: task)
             }
@@ -401,26 +397,23 @@ struct ContentView: View {
             }
             .controlSize(.large)
 
-            // 見送っても責めない。どうなるか（1時間後にまた出る）を先に見せておく
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
+            // 今はやらない2つ。どうなるかを小さく添えておく（押しても、下の「元に戻す」で戻せる）
+            HStack(spacing: 0) {
+                quietButton("あとで", note: "1時間後にまた出します", systemImage: "clock.arrow.circlepath") {
                     viewModel.skipRecommendation()
                 }
-            } label: {
-                VStack(spacing: 2) {
-                    Text("あとで")
-                        .font(.subheadline)
-                    Text("1時間後にまた出します")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                .keyboardShortcut("l", modifiers: .command)
+                .accessibilityIdentifier("skipButton")
+
+                Divider()
+                    .frame(height: 32)
+
+                quietButton("終わった", note: "完了にして次へ", systemImage: "checkmark") {
+                    viewModel.completeRecommendation()
                 }
-                .frame(maxWidth: .infinity)
-                .contentShape(Rectangle())
+                .keyboardShortcut("d", modifiers: .command)
+                .accessibilityIdentifier("completeButton")
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-            .keyboardShortcut("l", modifiers: .command)
-            .accessibilityIdentifier("skipButton")
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -509,38 +502,30 @@ struct ContentView: View {
         }
     }
 
-    /// 「あとでにした2件を戻す」。押すと、あとでにしたものがまた推薦に入る（これも元に戻せる）
-    private var skippedRow: some View {
+    /// カードの下の段の、控えめなボタン。名前と、押すとどうなるかを縦に並べる
+    private func quietButton(
+        _ title: LocalizedStringKey,
+        note: LocalizedStringKey,
+        systemImage: String,
+        action: @escaping () -> Void
+    ) -> some View {
         Button {
             withAnimation(.easeInOut(duration: 0.2)) {
-                viewModel.clearSkips()
+                action()
             }
         } label: {
-            Label("あとでにした\(viewModel.skippedTaskCount)件を戻す", systemImage: "arrow.uturn.backward")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity)
+            VStack(spacing: 2) {
+                Label(title, systemImage: systemImage)
+                    .font(.subheadline)
+                Text(note)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityIdentifier("restoreSkippedButton")
-    }
-
-    /// 名前の横の丸。押すと完了（「元に戻す」がすぐ出るので、確かめはしない）
-    private func completeCheck(for task: TaskItem) -> some View {
-        Button {
-            viewModel.completeRecommendation()
-        } label: {
-            Image(systemName: "circle")
-                .font(.system(size: 28, weight: .light))
-                .foregroundStyle(.secondary)
-                .frame(width: 32, height: 32)
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .padding(.top, 1)
-        .keyboardShortcut("d", modifiers: .command)
-        .accessibilityLabel("完了にする")
-        .accessibilityIdentifier("completeButton")
+        .foregroundStyle(.secondary)
     }
 
     /// 右上の「…」。めったに使わない操作をまとめる
@@ -603,10 +588,7 @@ struct ContentView: View {
         return HStack(spacing: 6) {
             pill(String(localized: "\(task.estimatedMinutes)分"), systemImage: "clock")
 
-            if let position = viewModel.stepPosition(of: task) {
-                pill(String(localized: "\(position.index)歩目"), systemImage: "shoeprints.fill")
-                    .accessibilityLabel("「\(CompletionMessages.baseTitle(of: position.parentTitle))」の\(position.index)歩目")
-            } else if let progress = stepCountText(for: task) {
+            if let progress = stepCountText(for: task) {
                 pill(progress, systemImage: "shoeprints.fill")
             }
 
@@ -725,70 +707,69 @@ struct ContentView: View {
         return parts.joined(separator: String(localized: "weekday.separator", defaultValue: "・", comment: "曜日を並べるときの区切り"))
     }
 
-    // MARK: - 今日
+    // MARK: - ほかのタスク
 
+    /// 「ほかのタスク 5件 ›」。今日の分と「あとで」の数を小さく添え、押すと一覧を開く
     @ViewBuilder
-    private var todaySection: some View {
-        let todayTasks = viewModel.todayTasks
+    private var otherTasksRow: some View {
+        let current = viewModel.recommendation?.task
+        let shownID = current?.parentTaskID ?? current?.id
+        let others = viewModel.visibleAllTasks.filter { !$0.isCompleted && $0.id != shownID }
 
-        if !todayTasks.isEmpty {
-            let carriedOverCount = todayTasks.filter { viewModel.isCarriedOver($0) }.count
-            let openTasks = todayTasks.filter { !$0.isCompleted }
-            let openCount = openTasks.count
-            let openMinutes = openTasks.reduce(0) { $0 + $1.estimatedMinutes }
-
-            VStack(alignment: .leading, spacing: 12) {
-            DisclosureGroup(isExpanded: $isTodayExpanded) {
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(todayTasks) { task in
-                        TaskRowView(
-                            task: task,
-                            note: viewModel.isCarriedOver(task)
-                                ? String(localized: "持ち越し")
-                                : viewModel.pinnedTaskIDs.contains(task.id) ? String(localized: "今日やりたい") : nil,
-                            onToggleCompletion: {
-                                viewModel.toggleCompletion(for: task)
-                            }
-                        )
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            editingTaskID = task.id
-                        }
-                    }
-                }
-                .padding(.top, 8)
+        if !viewModel.tasks.isEmpty {
+            NavigationLink {
+                allTasksView
             } label: {
-                // 完了したものは数えず、残りだけを示す
-                Label(
-                    openCount == 0
-                        ? "今日の分は終わりました"
-                        : carriedOverCount > 0
-                            ? "今日 残り\(openCount)件・約\(DoneTodayView.formatMinutes(openMinutes))（持ち越し \(carriedOverCount)）"
-                            : "今日 残り\(openCount)件・約\(DoneTodayView.formatMinutes(openMinutes))",
-                    systemImage: "sun.max"
-                )
-                .font(.headline)
-            }
+                HStack(spacing: 12) {
+                    Image(systemName: "list.bullet")
+                        .foregroundStyle(.blue)
 
-                if carriedOverCount > 0 {
-                    Button {
-                        isShowingCarryOver = true
-                    } label: {
-                        Label("持ち越し\(carriedOverCount)件をまとめて整理する", systemImage: "arrow.uturn.forward")
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("ほかのタスク \(others.count)件")
                             .font(.subheadline)
-                    }
-                    .buttonStyle(.bordered)
-                    .sheet(isPresented: $isShowingCarryOver) {
-                        CarryOverView(tasks: viewModel.carriedOverTasks) { ids, option in
-                            viewModel.reschedule(ids, to: option)
+                            .fontWeight(.medium)
+                            .foregroundStyle(.primary)
+
+                        if let detail = otherTasksDetail(excluding: shownID) {
+                            Text(detail)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
                     }
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
             .padding()
-            .background(.thinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16))
+            .accessibilityIdentifier("allTasksButton")
         }
+    }
+
+    /// 「今日 2件・あとで 1件」。どちらもなければ nil
+    private func otherTasksDetail(excluding shownID: UUID?) -> String? {
+        let visibleIDs = Set(viewModel.visibleAllTasks.map(\.id))
+        let today = viewModel.todayTasks.filter { !$0.isCompleted && visibleIDs.contains($0.id) && $0.id != shownID }.count
+        let skipped = viewModel.skippedTaskIDs.subtracting([shownID].compactMap { $0 }).count
+
+        var parts: [String] = []
+        if today > 0 {
+            parts.append(String(localized: "今日 \(today)件"))
+        }
+        if skipped > 0 {
+            parts.append(String(localized: "あとで \(skipped)件"))
+        }
+
+        guard !parts.isEmpty else {
+            return nil
+        }
+        return parts.joined(separator: String(localized: "weekday.separator", defaultValue: "・", comment: "曜日を並べるときの区切り"))
     }
 
     // MARK: - 今日やったこと
@@ -970,6 +951,10 @@ struct ContentView: View {
             pinnedTaskIDs: viewModel.pinnedTaskIDs,
             recurringTasks: viewModel.recurringTasks,
             hiddenCompletedTasks: viewModel.hiddenCompletedTasks,
+            todayTaskIDs: Set(viewModel.todayTasks.map(\.id)),
+            skippedTaskIDs: viewModel.skippedTaskIDs,
+            currentTaskID: viewModel.recommendation.map { $0.task.parentTaskID ?? $0.task.id },
+            carriedOverTasks: viewModel.carriedOverTasks,
             stepNotes: Dictionary(
                 uniqueKeysWithValues: viewModel.visibleAllTasks.compactMap { task in
                     stepProgressText(for: task).map { (task.id, $0) }
@@ -980,6 +965,9 @@ struct ContentView: View {
             },
             onDelete: { task in
                 viewModel.deleteTask(task)
+            },
+            onStartNow: { task in
+                beginFocus(on: task.id)
             },
             onUpdate: { updatedTask, lowering in
                 viewModel.updateTask(updatedTask, lowering: lowering)

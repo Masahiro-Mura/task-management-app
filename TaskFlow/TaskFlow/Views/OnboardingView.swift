@@ -18,7 +18,7 @@ struct OnboardingView: View {
         Page(
             systemImage: "sparkles",
             title: String(localized: "開いたら、今やる1つ"),
-            body: String(localized: "空き時間と期限から1つ選び、理由も添えます。"),
+            body: String(localized: "空き時間と期限から1つ選び、理由も添えます。ほかのタスクは、その下の一覧に。"),
             example: nil
         ),
         Page(
@@ -30,7 +30,7 @@ struct OnboardingView: View {
         Page(
             systemImage: "leaf",
             title: String(localized: "できなかった日も、責めません"),
-            body: String(localized: "やり残しは静かに持ち越します。気が乗らない日は、軽いものだけに。"),
+            body: String(localized: "やり残しは静かに持ち越します。押し間違えても、すぐ「元に戻す」で戻せます。"),
             example: nil
         )
     ]

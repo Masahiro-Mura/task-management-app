@@ -944,9 +944,14 @@ final class HomeViewModel: ObservableObject {
 
     /// 「あとで」にしているタスクの数（1時間たつと戻る）
     var skippedTaskCount: Int {
+        skippedTaskIDs.count
+    }
+
+    /// 「あとで」にしているタスク（終わったものと、時間が過ぎたものは除く）
+    var skippedTaskIDs: Set<UUID> {
         let currentDate = now()
         let taskIDs = Set(tasks.filter { !$0.isCompleted }.map(\.id))
-        return skippedUntil.filter { taskIDs.contains($0.key) && $0.value > currentDate }.count
+        return Set(skippedUntil.filter { taskIDs.contains($0.key) && $0.value > currentDate }.keys)
     }
 
     // MARK: - 推薦カードからの操作
@@ -1231,6 +1236,11 @@ final class HomeViewModel: ObservableObject {
         tasks[index].updatedAt = now()
         resetSkipCount(for: id)
         skipsInARow = 0
+        // 自分で始めたなら、もう「あとで」ではない
+        if skippedUntil.removeValue(forKey: id) != nil {
+            saveSkippedUntil()
+            updateRecommendation()
+        }
         focusSession = FocusSession(taskID: id, startedAt: now(), trialMinutes: trialMinutes)
         saveFocusSession()
         saveTasks()
