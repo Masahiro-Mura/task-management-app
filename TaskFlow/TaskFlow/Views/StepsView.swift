@@ -36,10 +36,22 @@ struct StepsView: View {
         NavigationStack {
             List {
                 if !doneSteps.isEmpty {
-                    Section("済んだ一歩") {
+                    Section {
                         ForEach(Array(doneSteps.enumerated()), id: \.element.id) { offset, step in
                             stepRow(step, number: offset + 1)
+                                .swipeActions(edge: .trailing) {
+                                    Button {
+                                        viewModel.reopenStep(step)
+                                    } label: {
+                                        Label("未完了に戻す", systemImage: "arrow.uturn.backward")
+                                    }
+                                    .tint(.orange)
+                                }
                         }
+                    } header: {
+                        Text("済んだ一歩")
+                    } footer: {
+                        Text("チェックを押すか左へスワイプすると、まだ済んでいないことに戻せます。")
                     }
                 }
 
@@ -163,11 +175,23 @@ struct StepsView: View {
             Spacer(minLength: 0)
 
             if step.isCompleted {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
+                // 押すと、まだ済んでいないことに戻す（下の「元に戻す」でさらに戻せる）
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        viewModel.reopenStep(step)
+                    }
+                } label: {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(.green)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("「\(step.title)」を未完了に戻す")
             }
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
     }
 
     private func addStep() {

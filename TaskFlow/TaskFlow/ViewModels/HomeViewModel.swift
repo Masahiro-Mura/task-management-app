@@ -1651,6 +1651,36 @@ final class HomeViewModel: ObservableObject {
         }
     }
 
+    /// 済んだ一歩を、まだ済んでいないことに戻す
+    ///
+    /// 戻した一歩は、決めた順のなかの元の位置に入り、つながりを組み直す（多くは、次にやる一歩になる）。
+    /// 元のタスクまで完了にしていたら、それも未完了に戻す（一歩が残っているのに完了のままにならないように）。
+    func reopenStep(_ step: TaskItem) {
+        undoable(String(localized: "「\(step.title)」を未完了に戻しました")) {
+            guard let parentID = step.parentTaskID,
+                  let index = tasks.firstIndex(where: { $0.id == step.id }),
+                  tasks[index].isCompleted else {
+                return
+            }
+
+            let currentDate = now()
+            tasks[index].isCompleted = false
+            tasks[index].completedAt = nil
+            tasks[index].updatedAt = currentDate
+
+            if let parentIndex = tasks.firstIndex(where: { $0.id == parentID }), tasks[parentIndex].isCompleted {
+                tasks[parentIndex].isCompleted = false
+                tasks[parentIndex].completedAt = nil
+                tasks[parentIndex].updatedAt = currentDate
+            }
+
+            nextStepCandidate = nil
+            rebuildStepChain(for: parentID)
+            saveTasks()
+            updateRecommendation()
+        }
+    }
+
     /// まだ済んでいない一歩の順番を入れ替える
     func moveOpenSteps(of parentID: UUID, fromOffsets source: IndexSet, toOffset destination: Int) {
         undoable(String(localized: "一歩の順番を変えました")) {

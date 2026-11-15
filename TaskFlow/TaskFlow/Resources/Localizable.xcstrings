@@ -9365,6 +9365,64 @@
         }
       }
     },
+    "チェックを押すか左へスワイプすると、まだ済んでいないことに戻せます。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap the check mark or swipe left to mark a step as not done."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Touchez la coche ou balayez vers la gauche pour la remettre à faire."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toca la marca o desliza a la izquierda para marcarlo como no hecho."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tippe auf das Häkchen oder wische nach links, um ihn wieder offen zu setzen."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tocca il segno di spunta o scorri a sinistra per segnarlo come non fatto."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toque na marca ou deslize para a esquerda para marcar como não feito."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点按勾选标记或向左滑动，可以恢复为未完成。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "點一下勾選標記或向左滑動，可以改回未完成。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "체크를 누르거나 왼쪽으로 쓸면 미완료로 되돌릴 수 있어요."
+          }
+        }
+      }
+    },
     "データ": {
       "localizations": {
         "de": {
@@ -16959,6 +17017,64 @@
           "stringUnit": {
             "state": "translated",
             "value": "設定截止時間"
+          }
+        }
+      }
+    },
+    "未完了に戻す": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mark not done"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non terminée"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No hecha"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unerledigt"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non fatta"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não feita"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复为未完成"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "改回未完成"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "미완료로"
           }
         }
       }
